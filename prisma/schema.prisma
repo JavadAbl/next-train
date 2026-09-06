@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// role: "ADMIN" | "OPERATOR" | "REPAIRMAN" (validated by zod at API layer)
+// type : "REPAIR" | "VISIT" | "REPLACEMENT"
+model User {
+  id           String          @id @default(cuid())
+  username     String          @unique
+  passwordHash String
+  fullName     String
+  role         String          @default("REPAIRMAN")
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  records      ServiceRecord[] @relation("RepairmanRecords")
+}
+
+model Train {
+  id          String          @id @default(cuid())
+  name        String
+  model       String?
+  serialNo    String?
+  description String?
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  nodes       PartNode[]
+  records     ServiceRecord[]
+}
+
+// One technical diagram ("print") per node. Root node: parentAreaId = null.
+model PartNode {
+  id           String       @id @default(cuid())
+  trainId      String
+  train        Train        @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  name         String
+  image        String
+  parentAreaId String?      @unique
+  parentArea   Area?        @relation("ChildNode", fields: [parentAreaId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  areas        Area[]       @relation("NodeAreas")
+}
+
+// Rectangular hotspot, coords stored as percentages of the parent image.
+// childNode != null -> clicking drills down; null -> serviceable part (leaf).
+model Area {
+  id        String          @id @default(cuid())
+  nodeId    String
+  node      PartNode        @relation("NodeAreas", fields: [nodeId], references: [id], onDelete: Cascade)
+  name      String
+  x         Float
+  y         Float
+  w         Float
+  h         Float
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  childNode PartNode?       @relation("ChildNode")
+  records   ServiceRecord[] @relation("AreaRecords")
+}
+
+model ServiceRecord {
+  id          String    @id @default(cuid())
+  trainId     String
+  train       Train     @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  areaId      String?
+  area        Area?     @relation("AreaRecords", fields: [areaId], references: [id], onDelete: SetNull)
+  // snapshot of hierarchy names at save time, e.g. "موتور دیزل › سیلندرها › پیستون › سوپاپ چپ"
+  path        String
+  type        String
+  date        DateTime
+  description String
+  partNumber  String?
+  laborHours  Float?
+  repairmanId String
+  repairman   User      @relation("RepairmanRecords", fields: [repairmanId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([trainId])
+  @@index([areaId])
+  @@index([repairmanId])
+  @@index([date])
+}
