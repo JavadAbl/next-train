@@ -23,3 +23,23 @@ Stage Summary:
 - Verified flows: login (3 roles, role-filtered nav) · navigator drill-down (train → motor → cylinders → piston → left valve → form with full path + history) · service record submission (history updates) · records table + filters + printable per-train report · builder draw-area → name → create → select → delete · child-diagram linking UI · users create/delete · mobile 390px + dark mode + session persistence
 - Demo data: 12 records, hierarchy depth 4, images in public/uploads/seed-*.png
 - Scripts kept in scripts/: gen-demo-images.ts, detect-boxes.ts, seed.ts (idempotent), test-jalali.ts
+
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: Fix "doesn't work" report — app unusable through the public preview URL
+
+Work Log:
+- Diagnosed via dev.log: POST /api/auth/login 200 but every follow-up API call 401 → session cookie never persisted in browser
+- Root cause: preview domain (https://preview-*.space-z.ai, HTTPS, cross-site iframe context) requires SameSite=None+Secure cookies; app set SameSite=Lax which browsers refuse to store/send in third-party contexts
+- Added src/lib/auth.ts: requestIsHttps() (checks x-forwarded-proto / Origin / Referer — tunnel between gateway and local proxy is plain HTTP so Origin/Referer are the reliable signal) + sessionCookieOptions(secure)
+- Updated login route: SameSite=None+Secure when HTTPS detected, Lax on plain localhost
+- Updated logout route: matching attributes so Secure cookies can be cleared
+- next.config.ts: added allowedDevOrigins: ["*.space-z.ai"] (fixes cross-origin dev asset/HMR warning)
+- .env: added stable random AUTH_SECRET (was falling back to hardcoded constant)
+- Restarted dev server via .zscripts/dev.sh
+
+Stage Summary:
+- Verified end-to-end through the REAL preview domain (preview-chat-2d76df1c-....space-z.ai) with curl + agent-browser: login → cookie stored → dashboard loads ("صبحبخیر، مدیر سیستم") → navigator → train tree API 200 → seed-locomotive.png renders, zero console errors
+- Set-Cookie now correct in both contexts: HTTPS preview → SameSite=none; Secure; localhost → SameSite=lax
+- tsc src/ clean, dev.log has zero 401s since restart

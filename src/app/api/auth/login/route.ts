@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { verifyPassword, createSessionToken, SESSION_COOKIE } from "@/lib/auth";
+import { verifyPassword, createSessionToken, SESSION_COOKIE, sessionCookieOptions, requestIsHttps } from "@/lib/auth";
 import { handleError, ok, fail } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -25,12 +25,7 @@ export async function POST(req: NextRequest) {
     const res = ok({
       user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role },
     });
-    res.cookies.set(SESSION_COOKIE, createSessionToken(user.id), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    res.cookies.set(SESSION_COOKIE, createSessionToken(user.id), sessionCookieOptions(requestIsHttps(req)));
     return res;
   } catch (err) {
     return handleError(err);

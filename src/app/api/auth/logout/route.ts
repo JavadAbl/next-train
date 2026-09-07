@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, sessionCookieOptions, requestIsHttps } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+  // Keep attributes consistent with the login cookie so Secure cookies can be cleared.
+  res.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions(requestIsHttps(req)), maxAge: 0 });
   return res;
 }

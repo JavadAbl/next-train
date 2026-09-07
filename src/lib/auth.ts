@@ -15,6 +15,43 @@ const SECRET = process.env.AUTH_SECRET || "loco-service-dev-secret-change-me"
 export const SESSION_COOKIE = "loco_session"
 const SESSION_TTL = 60 * 60 * 24 * 7 // 7 days
 
+// ---------- session cookie attributes ----------
+
+/** Minimal request shape (satisfied by NextRequest) used for HTTPS detection. */
+interface HeaderLike {
+  headers: { get(name: string): string | null }
+}
+
+/**
+ * True when the browser reached the app over HTTPS.
+ * The public preview proxy (space-z.ai) terminates TLS and may tunnel to the local
+ * proxy over plain HTTP, so we also inspect Origin/Referer, which always reflect
+ * the scheme the browser actually used. Any "https" signal wins.
+ */
+export function requestIsHttps(req: HeaderLike): boolean {
+  const xfProto = (req.headers.get("x-forwarded-proto") ?? "").split(",")[0].trim().toLowerCase()
+  const origin = (req.headers.get("origin") ?? "").toLowerCase()
+  const referer = (req.headers.get("referer") ?? "").toLowerCase()
+  return xfProto === "https" || origin.startsWith("https://") || referer.startsWith("https://")
+}
+
+/**
+ * Cookie options that work in both serving contexts:
+ * - HTTPS preview (app embedded in a cross-site iframe): browsers only accept/store
+ *   third-party cookies marked `SameSite=None; Secure`.
+ * - Plain HTTP localhost dev: `SameSite=None` without Secure is rejected by browsers,
+ *   so we fall back to `Lax`.
+ */
+export function sessionCookieOptions(secure: boolean) {
+  return {
+    httpOnly: true,
+    path: "/",
+    maxAge: SESSION_TTL,
+    sameSite: (secure ? "none" : "lax") as "none" | "lax",
+    secure,
+  }
+}
+
 // ---------- passwords (scrypt, built-in crypto) ----------
 
 export function hashPassword(password: string): string {
