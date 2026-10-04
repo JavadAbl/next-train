@@ -143,3 +143,17 @@ Stage Summary:
 - Cab & brake now drill down one level (6 new leaf parts); engine branch unchanged (4 levels)
 - Reported UX bug fixed and proven fixed with DOM probes + VLM visual checks at every state (loading/error/ready/cached)
 - Local repo is 3 commits ahead of origin/main — push still awaiting user confirmation
+
+---
+Task ID: 8
+Agent: main (Super Z)
+Task: Push approved — publish pending local commits to GitHub (user: «پوش»)
+
+Work Log:
+- User approved the push that had been on hold since Task 6
+- Pre-push audit of the 4 pending commits (1b74971, 67c039c, 10f29fc, 368fbd3): 37 files, +722/−26 — no .env, no *.pid, no dev.log, no secrets; only demo photos, QA screenshots, QA/generation scripts, seed, HotspotImage.tsx and worklog
+- Appended this worklog entry, committed, and pushed all pending commits to origin/main
+- Verified: ls-remote HEAD == local HEAD, remote branch up to date
+
+Stage Summary:
+- Tasks 6 (realistic seed photos) and 7 (cab/brake sub-parts + image loading spinner) are now live on GitHub
