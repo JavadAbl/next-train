@@ -86,7 +86,6 @@ async function main() {
   const areaEngine = await addArea(rootNode.id, "موتور دیزل", locoEngine);
   const areaBrake = await addArea(rootNode.id, "سیستم ترمز", locoBrake);
   const areaCab = await addArea(rootNode.id, "کابین راننده", locoCab);
-
   // level 2: diesel engine
   const engineNode = await addNode(areaEngine.id, "موتور دیزل", copyImage("engine"));
   const [engCyl, engTurbo, engPump] = boxes.engine;
@@ -111,13 +110,31 @@ async function main() {
   const areaLeftValve = await addArea(pistonNode.id, "سوپاپ چپ", pistLeft);
   const areaRightValve = await addArea(pistonNode.id, "سوپاپ راست", pistRight);
   const areaRings = await addArea(pistonNode.id, "رینگ پیستون", pistRings);
-  console.log("hierarchy ready (4 levels, 12 areas)");
+
+  // level 2: brake system (air brake equipment)
+  const brakeNode = await addNode(areaBrake.id, "سیستم ترمز", copyImage("brake"));
+  const [brkCompressor, brkReservoir, brkCylinder] = boxes.brake;
+  const areaCompressor = await addArea(brakeNode.id, "کمپرسور هوا", brkCompressor);
+  const areaReservoir = await addArea(brakeNode.id, "مخزن هوای فشرده", brkReservoir);
+  const areaBrakeCylinder = await addArea(brakeNode.id, "سیلندر و کفشک ترمز", brkCylinder);
+
+  // level 2: driver cab (interior)
+  const cabNode = await addNode(areaCab.id, "کابین راننده", copyImage("cab"));
+  const [cabWindshield, cabPanel, cabDesk] = boxes.cab;
+  const areaWindshield = await addArea(cabNode.id, "شیشه جلو و برف‌پاک‌کن", cabWindshield);
+  const areaGaugePanel = await addArea(cabNode.id, "تابلو دستگاه‌ها", cabPanel);
+  const areaControlDesk = await addArea(cabNode.id, "اهرم فرمان و ترمز", cabDesk);
+  console.log("hierarchy ready (6 nodes, 18 areas)");
 
   // ---------- sample records ----------
   const S = " › ";
   const PATH = {
-    brake: `${TRAIN_NAME}${S}سیستم ترمز`,
-    cab: `${TRAIN_NAME}${S}کابین راننده`,
+    brakeCylinder: `${TRAIN_NAME}${S}سیستم ترمز${S}سیلندر و کفشک ترمز`,
+    compressor: `${TRAIN_NAME}${S}سیستم ترمز${S}کمپرسور هوا`,
+    reservoir: `${TRAIN_NAME}${S}سیستم ترمز${S}مخزن هوای فشرده`,
+    gaugePanel: `${TRAIN_NAME}${S}کابین راننده${S}تابلو دستگاه‌ها`,
+    controlDesk: `${TRAIN_NAME}${S}کابین راننده${S}اهرم فرمان و ترمز`,
+    windshield: `${TRAIN_NAME}${S}کابین راننده${S}شیشه جلو و برف‌پاک‌کن`,
     turbo: `${TRAIN_NAME}${S}موتور دیزل${S}توربوشارژر`,
     pump: `${TRAIN_NAME}${S}موتور دیزل${S}پمپ روغن`,
     airValve: `${TRAIN_NAME}${S}سیلندرها${S}سوپاپ هوا`,
@@ -169,16 +186,40 @@ async function main() {
       partNumber: "OP-2290", laborHours: 5, repairmanId: repairman1.id,
     },
     {
-      areaId: areaBrake, path: PATH.brake, type: "REPAIR",
+      areaId: areaBrakeCylinder, path: PATH.brakeCylinder, type: "REPAIR",
       jy: 1405, jm: 6, jd: 3,
       description: "تعویض لنت‌های ترمز بوگی جلو و تنظیم مجدد فشار سیستم ترمز هوایی.",
       laborHours: 3, repairmanId: repairman2.id,
     },
     {
-      areaId: areaCab, path: PATH.cab, type: "VISIT",
+      areaId: areaGaugePanel, path: PATH.gaugePanel, type: "VISIT",
       jy: 1405, jm: 7, jd: 2,
       description: "بازدید تجهیزات کابین، تست گاویندگان و کالیبراسیون نمایشگرهای فشار و دما.",
       laborHours: 1.5, repairmanId: repairman1.id,
+    },
+    {
+      areaId: areaCompressor, path: PATH.compressor, type: "REPAIR",
+      jy: 1405, jm: 4, jd: 2,
+      description: "تعویض فیلتر روغن و تنظیم شیر تخلیه کمپرسور هوا در سرویس دوره‌ای سیستم ترمز.",
+      laborHours: 2, repairmanId: repairman1.id,
+    },
+    {
+      areaId: areaReservoir, path: PATH.reservoir, type: "VISIT",
+      jy: 1405, jm: 7, jd: 12,
+      description: "تست نشتی شبکه هوای فشرده، تخلیه رطوبت مخزن و بازرسی شیر اطمینان.",
+      laborHours: 1, repairmanId: repairman2.id,
+    },
+    {
+      areaId: areaControlDesk, path: PATH.controlDesk, type: "REPAIR",
+      jy: 1405, jm: 6, jd: 9,
+      description: "تنظیم میکروسوئیچ‌های اهرم فرمان و روانکاری مفصل دسته فرمان.",
+      laborHours: 1.5, repairmanId: repairman1.id,
+    },
+    {
+      areaId: areaWindshield, path: PATH.windshield, type: "REPLACEMENT",
+      jy: 1405, jm: 2, jd: 8,
+      description: "تعویض تیغه‌های برف‌پاک‌کن شیشه جلو به دلیل فرسودگی لاستیک تیغه‌ها.",
+      partNumber: "WP-330", laborHours: 0.5, repairmanId: repairman2.id,
     },
     {
       areaId: areaAirValve, path: PATH.airValve, type: "VISIT",

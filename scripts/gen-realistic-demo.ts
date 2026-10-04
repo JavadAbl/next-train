@@ -56,6 +56,26 @@ const IMAGES: { key: string; prompt: string }[] = [
       "one engine poppet valve lying on the bench at the LEFT side and another poppet valve at the RIGHT side, " +
       STYLE,
   },
+  {
+    key: "cab",
+    prompt:
+      "Interior of a diesel locomotive driver cab photographed straight-on from the cab doorway toward the front: " +
+      "large windshield with two windshield wipers at the TOP third of the frame, " +
+      "instrument panel with round analog pressure gauges and toggle switches mounted in the MIDDLE band between windshield and desk, " +
+      "main control desk with the train brake lever and throttle handle at the BOTTOM third of the frame, " +
+      STYLE,
+  },
+  {
+    key: "brake",
+    prompt:
+      "Three separate pieces of locomotive air brake equipment standing in a neat horizontal row on a workshop floor, " +
+      "clearly separated with visible floor gaps between them, each piece occupying about one third of the frame width: " +
+      "an electric-motor-driven air compressor with cooling fins on the LEFT third, " +
+      "a horizontal cylindrical air reservoir tank standing on support cradles in the MIDDLE third, " +
+      "a brake cylinder with push rod, linkage and brake shoes on the RIGHT third, " +
+      "flat straight-on composition, all three pieces at the same distance from the camera, " +
+      STYLE,
+  },
 ];
 
 async function main() {

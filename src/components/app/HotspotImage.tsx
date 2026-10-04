@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
-import { Wrench, Layers } from "lucide-react";
+import { Wrench, Layers, Loader2, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TreeArea } from "@/lib/client";
 
@@ -42,7 +42,19 @@ export default function HotspotImage({
   className,
 }: HotspotImageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+
+  // image loading state — hotspots stay hidden until the photo is actually painted,
+  // otherwise the overlay rects appear floating before the image arrives.
+  // "key={image}" remounts the <img> on navigation so onLoad fires even for cached files.
+  const [imgState, setImgState] = useState<"loading" | "ready" | "error">("loading");
+  const [prevSrc, setPrevSrc] = useState(image);
+  if (prevSrc !== image) {
+    // official React "adjust state during render" pattern for resetting on prop change
+    setPrevSrc(image);
+    setImgState("loading");
+  }
 
   const pct = useCallback((e: React.PointerEvent) => {
     const el = containerRef.current;
@@ -55,7 +67,7 @@ export default function HotspotImage({
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!drawMode) return;
+    if (!drawMode || imgState !== "ready") return;
     const p = pct(e);
     // pointer capture keeps drag events flowing when the cursor leaves the canvas;
     // it can legitimately fail (e.g. non-active pointer id), so never let it abort the drag
@@ -100,6 +112,7 @@ export default function HotspotImage({
       className={cn(
         "relative overflow-hidden rounded-xl border bg-muted/40 select-none touch-none",
         drawMode ? "cursor-crosshair" : "cursor-default",
+        imgState !== "ready" && "min-h-[220px] flex items-center justify-center",
         className
       )}
       onPointerDown={onPointerDown}
@@ -107,15 +120,34 @@ export default function HotspotImage({
       onPointerUp={onPointerUp}
       onPointerCancel={() => setDraft(null)}
     >
-      
       <img
+        key={image}
+        ref={imgRef}
         src={image}
         alt={alt}
         draggable={false}
-        className="block w-full h-auto pointer-events-none"
+        onLoad={() => setImgState("ready")}
+        onError={() => setImgState("error")}
+        className={cn(
+          "block w-full h-auto pointer-events-none",
+          imgState !== "ready" && "absolute inset-0 w-full h-full object-contain opacity-0"
+        )}
       />
 
-      {areas.map((area) => {
+      {imgState === "loading" && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-muted/70 text-muted-foreground">
+          <Loader2 className="size-10 animate-spin text-primary" aria-hidden />
+          <p className="text-xs font-medium">در حال بارگذاری تصویر…</p>
+        </div>
+      )}
+      {imgState === "error" && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-muted/70 text-muted-foreground">
+          <ImageIcon className="size-10 opacity-50" aria-hidden />
+          <p className="text-xs font-medium">تصویر بارگذاری نشد</p>
+        </div>
+      )}
+
+      {imgState === "ready" && areas.map((area) => {
         const selected = selectedAreaId === area.id;
         const leaf = !area.hasChild;
         return (
@@ -161,7 +193,7 @@ export default function HotspotImage({
         );
       })}
 
-      {draftRect && (
+      {imgState === "ready" && draftRect && (
         <div
           className="absolute z-30 border-2 border-dashed border-primary bg-primary/20 pointer-events-none"
           style={draftRect}
