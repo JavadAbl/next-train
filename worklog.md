@@ -85,3 +85,22 @@ Stage Summary:
 - Filter card: overlap eliminated at every breakpoint; new serial-match filter applies to BOTH the records table and the printable report
 - Excel: one-click download of the currently filtered records (all filters honored) — styled RTL Persian sheet with mismatch highlighting
 - Files touched: RecordsView.tsx, ReportView.tsx, AppRoot.tsx, TrainsView.tsx, api/records/route.ts, NEW api/records/export/route.ts, NEW ExcelIcon.tsx; scripts/verify-export.ts + check-overlap.js kept for regression
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: Publish the project to GitHub (user-provided repo JavadAbl/next-train + PAT)
+
+Work Log:
+- Confirmed prior state: Tasks 3 (serial verification) and 4 (filter overlap fix + mismatch filter + Excel export) fully implemented and committed; working tree clean
+- Pre-push security/ hygiene audit of tracked files: found .env and .zscripts/dev.pid tracked
+  - .env contained only the sandbox-absolute DATABASE_URL (no secret), untracked anyway for portability; .env.example added with prisma-relative path file:../db/custom.db + optional AUTH_SECRET
+  - .zscripts/dev.pid (runtime PID) untracked; .gitignore += *.pid and !.env.example
+- Added root README.md (Persian): intro, features (image hierarchy, serial mismatch, Excel/PDF reports), roles, demo accounts table, tech stack, quick-start with bun, project structure, security note; references screenshots in assets/screens/
+- Confirmed no sandbox absolute paths inside src/ or prisma/ (grep /home/z clean)
+- Committed (docs: README + .env.example, untrack .env/dev.pid), then executed the user's GitHub commands: git remote add origin (PAT embedded for auth), git branch -M main, git push -u origin main
+- Verified post-push: ls-remote HEAD == local HEAD (0d640d6); remote tree contains .env.example but NOT .env; branch tracking main...origin/main clean; app health 200 on / and /api/auth/me
+
+Stage Summary:
+- Repository live at https://github.com/JavadAbl/next-train.git — branch main, 146 files, ~3.2 MB, full 6-commit history, demo DB included for out-of-the-box run
+- Sensitive/local files excluded (.env, dev.pid, node_modules, .next, dev.log, skills/)
