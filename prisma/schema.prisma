@@ -77,7 +77,9 @@ model ServiceRecord {
   type        String
   date        DateTime
   description String
-  partNumber  String?
+  partNumber  String?   // serial of the NEW part installed (REPLACEMENT) or related part no.
+  removedSerial String? // serial read from the physically installed (removed) part before replacement
+  serialMismatch Boolean @default(false) // removedSerial didn't match the last recorded serial
   laborHours  Float?
   repairmanId String
   repairman   User      @relation("RepairmanRecords", fields: [repairmanId], references: [id])

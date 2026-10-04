@@ -43,3 +43,25 @@ Stage Summary:
 - Verified end-to-end through the REAL preview domain (preview-chat-2d76df1c-....space-z.ai) with curl + agent-browser: login → cookie stored → dashboard loads ("صبحبخیر، مدیر سیستم") → navigator → train tree API 200 → seed-locomotive.png renders, zero console errors
 - Set-Cookie now correct in both contexts: HTTPS preview → SameSite=none; Secure; localhost → SameSite=lax
 - tsc src/ clean, dev.log has zero 401s since restart
+
+---
+Task ID: 3
+Agent: main (Super Z)
+Task: Serial-number verification feature for part replacement (user request in Persian)
+
+Work Log:
+- Schema: ServiceRecord += removedSerial String? (serial read from physically installed part) + serialMismatch Boolean @default(false); prisma db push
+- API records POST: partNumber now MANDATORY for REPLACEMENT (server-side 400); serialMismatch computed SERVER-SIDE (never trusts client) by comparing removedSerial against the latest serial recorded on/before the new record's date (date-relative so backdated records compare against the correct predecessor)
+- API records GET: new ?mismatch=true filter
+- ServiceFormModal: "آخرین شماره سریال ثبت‌شده (تا تاریخ سرویس)" read-only box (updates when date changes); REPLACEMENT-only amber panel with installed-serial input, live match/mismatch status, and the auto-activating «عدم انطباق کد سریال» option (greyed until mismatch detected); client-side required check for new serial; history items show removed→new serials + mismatch badge
+- RecordsView: new "تطبیق سریال" column (عدم انطباق badge / مطابق / —), previous serial under part number, "فقط عدم انطباق سریال" filter toggle, mismatch count in summary, detail dialog shows both serials + status
+- ReportView (print): grid-cols-5 summary with mismatch count (bold border when >0), "تطبیق" column, bold+shaded mismatch cells, bottom warning box when mismatches exist
+- Stats API + Dashboard: mismatchRecords count, amber warning banner on dashboard (links to records), mismatch badge in recent list
+- Demo data: seed.ts += 2 records (mismatch case on سوپاپ چپ V-4709≠V-4712, match case on رینگ پیستون PR-880=PR-880); scripts/add-serial-demo.ts (idempotent) applied to existing DB
+- Fixed date-ordering bug found in testing: lastRecordedSerial was absolute-latest, now lte-record-date (test 4 initially returned wrong result)
+- Verified end-to-end through preview domain: mismatch filter API, server validation (400), server-side computation both cases (true/false), browser flow (form → replacement → last-serial box V-4712-B → mismatch option auto-activates on V-4709 → required-serial block works → submit → badges in history/records/dashboard/report), VLM visual check of report (clean RTL, no overlap)
+- tsc src/ clean, eslint clean, test records cleaned from DB
+
+Stage Summary:
+- Feature complete: mandatory new-part serial for replacements, separate display of last recorded serial (date-relative), live server-verified mismatch detection with auto-activating option, mismatch visibility across records table (badge+filter), printable report (column+count+warning), dashboard banner
+- Demo DB currently: 14 records, 1 mismatch (سوپاپ چپ), 1 match (رینگ پیستون)

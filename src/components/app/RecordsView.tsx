@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardList, Loader2, RotateCcw, FileText, Search, ChevronDown } from "lucide-react";
+import { ClipboardList, Loader2, RotateCcw, FileText, Search, ChevronDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
   const [trainId, setTrainId] = useState("all");
   const [type, setType] = useState("all");
   const [repairmanId, setRepairmanId] = useState("all");
+  const [mismatchOnly, setMismatchOnly] = useState(false);
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [from, setFrom] = useState("");
@@ -55,7 +56,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
     api<{ users: UserRow[] }>("/api/users").then((r) => setRepairmen(r.users)).catch(() => {});
   }, []);
 
-  const queryKey = `${trainId}|${type}|${repairmanId}|${qDebounced}|${from}|${to}`;
+  const queryKey = `${trainId}|${type}|${repairmanId}|${qDebounced}|${from}|${to}|${mismatchOnly}`;
   const [loadedKey, setLoadedKey] = useState("");
 
   useEffect(() => {
@@ -66,6 +67,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
     if (qDebounced.trim()) sp.set("q", qDebounced.trim());
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
+    if (mismatchOnly) sp.set("mismatch", "true");
     let alive = true;
     api<{ records: RecordRow[] }>(`/api/records?${sp.toString()}`)
       .then((res) => {
@@ -80,19 +82,22 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
         setLoadedKey(queryKey);
       });
     return () => { alive = false; };
-  }, [trainId, type, repairmanId, qDebounced, from, to, toast, queryKey]);
+  }, [trainId, type, repairmanId, qDebounced, from, to, mismatchOnly, toast, queryKey]);
 
   // records are stale (refetching) whenever the query key changed but hasn't finished loading
   const loaded = loadedKey === queryKey && records !== null;
 
   const resetFilters = () => {
-    setTrainId("all"); setType("all"); setRepairmanId("all"); setQ(""); setQDebounced(""); setFrom(""); setTo("");
+    setTrainId("all"); setType("all"); setRepairmanId("all"); setMismatchOnly(false); setQ(""); setQDebounced(""); setFrom(""); setTo("");
     if (searchTimer.current) clearTimeout(searchTimer.current);
   };
 
   const counts = useMemo(() => {
-    const c = { REPAIR: 0, VISIT: 0, REPLACEMENT: 0 };
-    (records || []).forEach((r) => { c[r.type] += 1; });
+    const c = { REPAIR: 0, VISIT: 0, REPLACEMENT: 0, mismatch: 0 };
+    (records || []).forEach((r) => {
+      c[r.type] += 1;
+      if (r.serialMismatch) c.mismatch += 1;
+    });
     return c;
   }, [records]);
 
@@ -107,15 +112,32 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
             {loaded ? `${faNumber(records?.length ?? 0)} سرویس ثبت‌شده` : "در حال بارگذاری..."}
             <span className="mx-2">·</span>
             تعمیر {faDigits(counts["REPAIR"])}، بازدید {faDigits(counts["VISIT"])}، تعویض {faDigits(counts["REPLACEMENT"])}
+            {counts.mismatch > 0 && (
+              <>
+                <span className="mx-2">·</span>
+                <span className="text-amber-700 dark:text-amber-400 font-medium">{faDigits(counts.mismatch)} عدم انطباق سریال</span>
+              </>
+            )}
           </p>
         </div>
-        <Button
-          disabled={trainId === "all" || !loaded || (records?.length ?? 0) === 0}
-          onClick={() => trainId !== "all" && onOpenReport(trainId, { from, to, type })}
-          title={trainId === "all" ? "ابتدا یک لوکوموتیو انتخاب کنید" : undefined}
-        >
-          <FileText className="size-4" /> گزارش چاپی لوکوموتیو
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={mismatchOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMismatchOnly((v) => !v)}
+            aria-pressed={mismatchOnly}
+            className={cn(mismatchOnly && "bg-amber-600 hover:bg-amber-700 text-white")}
+          >
+            <AlertTriangle className="size-4" /> فقط عدم انطباق سریال
+          </Button>
+          <Button
+            disabled={trainId === "all" || !loaded || (records?.length ?? 0) === 0}
+            onClick={() => trainId !== "all" && onOpenReport(trainId, { from, to, type })}
+            title={trainId === "all" ? "ابتدا یک لوکوموتیو انتخاب کنید" : undefined}
+          >
+            <FileText className="size-4" /> گزارش چاپی لوکوموتیو
+          </Button>
+        </div>
       </div>
 
       {/* filters */}
@@ -207,6 +229,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
                   <th className="px-3 py-2.5 text-start font-medium whitespace-nowrap">نوع</th>
                   <th className="px-3 py-2.5 text-start font-medium whitespace-nowrap">تعمیرکار</th>
                   <th className="px-3 py-2.5 text-start font-medium whitespace-nowrap">شماره فنی</th>
+                  <th className="px-3 py-2.5 text-start font-medium whitespace-nowrap">تطبیق سریال</th>
                   <th className="px-3 py-2.5 text-start font-medium whitespace-nowrap">ساعت</th>
                   <th className="px-3 py-2.5 text-start font-medium">شرح</th>
                   <th className="w-9" aria-label="جزئیات" />
@@ -228,7 +251,23 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{r.repairman.fullName}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap" dir="ltr">{r.partNumber || "—"}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap" dir="ltr">
+                      {r.partNumber || "—"}
+                      {r.removedSerial && (
+                        <span className="block text-[10px] text-muted-foreground" title="سریال قطعهِ نصب‌شده قبلی">قبلی: {r.removedSerial}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      {r.serialMismatch ? (
+                        <span className="inline-flex items-center gap-1 rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-600 px-1.5 py-0.5 text-xs font-semibold">
+                          <AlertTriangle className="size-3" aria-hidden /> عدم انطباق
+                        </span>
+                      ) : r.removedSerial ? (
+                        <span className="text-xs text-emerald-700 dark:text-emerald-400">مطابق</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{r.laborHours != null ? faDigits(r.laborHours) : "—"}</td>
                     <td className="px-3 py-2.5 max-w-64 truncate text-muted-foreground" title={r.description}>{r.description}</td>
                     <td className="px-2"><ChevronDown className="size-4 text-muted-foreground -rotate-90 rtl:rotate-90" aria-hidden /></td>
@@ -258,7 +297,20 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
               <p className="flex gap-2"><span className="text-muted-foreground shrink-0">تاریخ سرویس:</span><span className="font-medium">{formatJalali(detail.date)}</span></p>
               <p className="flex gap-2"><span className="text-muted-foreground shrink-0">مسیر قطعه:</span><span className="font-medium text-primary">{detail.path}</span></p>
               <p className="flex gap-2"><span className="text-muted-foreground shrink-0">تعمیرکار:</span><span className="font-medium">{detail.repairman.fullName}</span></p>
-              {detail.partNumber && <p className="flex gap-2"><span className="text-muted-foreground shrink-0">شماره فنی:</span><span dir="ltr" className="font-medium">{detail.partNumber}</span></p>}
+              {detail.partNumber && <p className="flex gap-2"><span className="text-muted-foreground shrink-0">شماره فنی قطعه جدید:</span><span dir="ltr" className="font-medium">{detail.partNumber}</span></p>}
+              {detail.removedSerial && <p className="flex gap-2"><span className="text-muted-foreground shrink-0">سریال قطعه نصب‌شده قبلی:</span><span dir="ltr" className="font-medium">{detail.removedSerial}</span></p>}
+              <p className="flex gap-2 items-center">
+                <span className="text-muted-foreground shrink-0">تطبیق سریال:</span>
+                {detail.serialMismatch ? (
+                  <span className="inline-flex items-center gap-1 rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-600 px-1.5 py-0.5 text-xs font-semibold">
+                    <AlertTriangle className="size-3" aria-hidden /> عدم انطباق کد سریال
+                  </span>
+                ) : detail.removedSerial ? (
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">مطابق</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">تطبیق نشده (سریالی وارد نشده است)</span>
+                )}
+              </p>
               {detail.laborHours != null && <p className="flex gap-2"><span className="text-muted-foreground shrink-0">ساعت کار:</span><span className="font-medium">{faDigits(detail.laborHours)}</span></p>}
               <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-muted-foreground text-xs mb-1">شرح سرویس</p>

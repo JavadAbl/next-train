@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   TrainFront, Wrench, ClipboardList, Users, Map, Workflow, Plus,
-  Wrench as WrenchIcon, Eye, Package, Loader2,
+  Wrench as WrenchIcon, Eye, Package, Loader2, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,7 @@ interface Stats {
   users: number;
   records: number;
   monthRecords: number;
+  mismatchRecords: number;
   byType: Record<string, number>;
 }
 
@@ -56,6 +57,19 @@ export default function DashboardView({ user, onNavigate, onOpenNavigator, onOpe
 
   return (
     <div className="space-y-6">
+      {(stats?.mismatchRecords ?? 0) > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate("records")}
+          className="w-full flex items-start gap-3 rounded-xl border-2 border-amber-400/70 bg-amber-50 dark:bg-amber-950/30 p-4 text-start transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/50"
+        >
+          <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" aria-hidden />
+          <span className="text-sm leading-6">
+            <b className="text-amber-800 dark:text-amber-300">{faNumber(stats!.mismatchRecords)} مورد عدم انطباق کد سریال ثبت شده است</b>
+            <span className="text-muted-foreground"> — در سرویس‌های تعویض قطعه، سریال قطعه نصب‌شده با آخرین سریال ثبت‌شده سامانه مطابقت نداشته است. برای مشاهده و پیگیری، سوابق سرویس را ببینید.</span>
+          </span>
+        </button>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{greeting()}، {user.fullName} 👋</h1>
@@ -157,6 +171,11 @@ export default function DashboardView({ user, onNavigate, onOpenNavigator, onOpe
                       <p className="font-medium truncate">{r.path}</p>
                       <p className="text-xs text-muted-foreground truncate">{r.repairman.fullName} · {r.description}</p>
                     </div>
+                    {r.serialMismatch && (
+                      <span className="shrink-0 rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-600 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap">
+                        عدم انطباق سریال
+                      </span>
+                    )}
                     <Badge variant="outline" className="shrink-0 whitespace-nowrap">{formatJalali(r.date)}</Badge>
                   </li>
                 ))}

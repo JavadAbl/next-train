@@ -63,6 +63,8 @@ export interface RecordRow {
   date: string;
   description: string;
   partNumber: string | null;
+  removedSerial: string | null;
+  serialMismatch: boolean;
   laborHours: number | null;
   repairman: { id: string; fullName: string };
   createdAt: string;

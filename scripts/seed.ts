@@ -186,6 +186,22 @@ async function main() {
       description: "رفع نشتی سوپاپ دود و آب‌بندی مجدد نشیمن سوپاپ.",
       laborHours: 2.5, repairmanId: repairman2.id,
     },
+    {
+      // later replacement on سوپاپ چپ: installed serial (V-4709) does NOT match last recorded (V-4712)
+      areaId: areaLeftValve, path: `${PATH.pistonRoot}${S}سوپاپ چپ`, type: "REPLACEMENT",
+      jy: 1405, jm: 8, jd: 20,
+      description: "تعویض دوره‌ای سوپاپ چپ؛ هنگام بازکردن، کد سریال قطعه نصب‌شده (V-4709) با آخرین سریال ثبت‌شده سامانه (V-4712) مطابقت نداشت و عدم انطباق ثبت شد.",
+      partNumber: "V-4800", removedSerial: "V-4709", serialMismatch: true,
+      laborHours: 3, repairmanId: repairman2.id,
+    },
+    {
+      // later replacement on رینگ پیستون: installed serial matches last recorded (PR-880)
+      areaId: areaRings, path: `${PATH.pistonRoot}${S}رینگ پیستون`, type: "REPLACEMENT",
+      jy: 1405, jm: 8, jd: 5,
+      description: "تعویض دوره‌ای ست رینگ‌ها در بازسازی عمده؛ کد سریال قطعه نصب‌شده با آخرین سریال ثبت‌شده مطابقت داشت.",
+      partNumber: "PR-890", removedSerial: "PR-880", serialMismatch: false,
+      laborHours: 5.5, repairmanId: repairman1.id,
+    },
   ];
 
   for (const r of records) {
@@ -198,6 +214,8 @@ async function main() {
         date: jalaliToDate(r.jy, r.jm, r.jd),
         description: r.description,
         partNumber: r.partNumber || null,
+        removedSerial: r.removedSerial || null,
+        serialMismatch: r.serialMismatch || false,
         laborHours: r.laborHours ?? null,
         repairmanId: r.repairmanId,
       },

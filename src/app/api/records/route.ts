@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
     const q = sp.get("q") || undefined;
     const from = sp.get("from") || undefined;
     const to = sp.get("to") || undefined;
+    const mismatchOnly = sp.get("mismatch") === "true";
     const limit = Math.min(Number(sp.get("limit")) || 500, 1000);
 
     const records = await db.serviceRecord.findMany({
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
         ...(from ? { date: { gte: parseISODate(from) } } : {}),
         ...(to ? { date: { lte: parseISODate(to) } } : {}),
         ...(from && to ? { date: { gte: parseISODate(from), lte: parseISODate(to) } } : {}),
+        ...(mismatchOnly ? { serialMismatch: true } : {}),
       },
       include: {
         repairman: { select: { id: true, fullName: true } },
@@ -75,15 +77,35 @@ const createSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "قالب تاریخ نامعتبر است"),
   description: z.string().trim().min(3, "شرح سرویس حداقل ۳ نویسه باشد"),
   partNumber: z.string().trim().optional().nullable(),
+  removedSerial: z.string().trim().optional().nullable(),
   laborHours: z.number().min(0).max(1000).optional().nullable(),
 });
+
+/**
+ * Latest serial recorded for this part by a service on/before the given date —
+ * i.e. what the system expects to be physically installed at that moment.
+ * Date-relative so backdated records compare against the correct predecessor.
+ */
+async function lastRecordedSerial(areaId: string, asOf: Date): Promise<string | null> {
+  const last = await db.serviceRecord.findFirst({
+    where: { areaId, partNumber: { not: null }, date: { lte: asOf } },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    select: { partNumber: true },
+  });
+  return last?.partNumber ?? null;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
     const parsed = createSchema.safeParse(await req.json());
     if (!parsed.success) return fail(parsed.error.issues[0]?.message || "داده نامعتبر");
-    const { areaId, type, date, description, partNumber, laborHours } = parsed.data;
+    const { areaId, type, date, description, partNumber, removedSerial, laborHours } = parsed.data;
+
+    // serial of the NEW part is mandatory for replacements
+    if (type === "REPLACEMENT" && !partNumber) {
+      return fail("برای تعویض قطعه، ثبت شماره سریال قطعه جدید الزامی است", 400);
+    }
 
     const area = await db.area.findUnique({
       where: { id: areaId },
@@ -102,6 +124,13 @@ export async function POST(req: NextRequest) {
     if (!train) return fail("لوکوموتیو یافت نشد", 404);
 
     const path = await buildPath(areaId, train.name);
+
+    // server-side serial verification: compare the serial read from the physically
+    // installed part with the last serial recorded for this part — never trust the client flag
+    const expectedSerial = await lastRecordedSerial(areaId, parseISODate(date));
+    const removed = removedSerial || null;
+    const serialMismatch = Boolean(removed && expectedSerial && removed !== expectedSerial);
+
     const record = await db.serviceRecord.create({
       data: {
         trainId: train.id,
@@ -111,6 +140,8 @@ export async function POST(req: NextRequest) {
         date: parseISODate(date),
         description,
         partNumber: partNumber || null,
+        removedSerial: removed,
+        serialMismatch,
         laborHours: laborHours ?? null,
         repairmanId: user.id,
       },

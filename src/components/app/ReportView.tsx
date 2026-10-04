@@ -5,6 +5,7 @@ import { Printer, ChevronLeft, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, TYPE_LABELS, type RecordRow } from "@/lib/client";
 import { formatJalali, formatJalaliDateTime, faDigits, faNumber } from "@/lib/jalali";
+import { cn } from "@/lib/utils";
 import type { ReportFilters } from "./RecordsView";
 
 interface Props {
@@ -31,8 +32,11 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
       .catch(() => setRecords([]));
   }, [trainId, filters]);
 
-  const counts = { REPAIR: 0, VISIT: 0, REPLACEMENT: 0 };
-  (records || []).forEach((r) => { counts[r.type] += 1; });
+  const counts = { REPAIR: 0, VISIT: 0, REPLACEMENT: 0, mismatch: 0 };
+  (records || []).forEach((r) => {
+    counts[r.type] += 1;
+    if (r.serialMismatch) counts.mismatch += 1;
+  });
   const totalHours = (records || []).reduce((s, r) => s + (r.laborHours || 0), 0);
   const rangeText = filters.from || filters.to
     ? `بازه: ${filters.from ? formatJalali(new Date(filters.from)) : "ابتدا"} تا ${filters.to ? formatJalali(new Date(filters.to)) : "اکنون"}`
@@ -73,7 +77,7 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
           </div>
 
           {/* summary */}
-          <div className="grid grid-cols-4 gap-2 py-3 text-center text-xs">
+          <div className="grid grid-cols-5 gap-2 py-3 text-center text-xs">
             <div className="border rounded p-2">
               <p className="font-bold text-base">{faNumber(records.length)}</p>
               <p className="text-black/70">کل سرویس‌ها</p>
@@ -90,6 +94,10 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
               <p className="font-bold text-base">{faNumber(counts.REPLACEMENT)}</p>
               <p className="text-black/70">تعویض قطعه</p>
             </div>
+            <div className={cn("rounded p-2 border", counts.mismatch > 0 ? "border-black border-2 bg-black/10" : "border")}>
+              <p className="font-bold text-base">{faNumber(counts.mismatch)}</p>
+              <p className="text-black/70 font-semibold">عدم انطباق سریال</p>
+            </div>
           </div>
           <p className="text-xs text-black/70 mb-3">
             {rangeText}{typeFilterText} — جمع ساعت کار: {faDigits(totalHours)} ساعت
@@ -104,7 +112,8 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
                 <th className="border border-black/30 px-1.5 py-1.5">مسیر قطعه</th>
                 <th className="border border-black/30 px-1.5 py-1.5">نوع</th>
                 <th className="border border-black/30 px-1.5 py-1.5">تعمیرکار</th>
-                <th className="border border-black/30 px-1.5 py-1.5">شماره فنی</th>
+                <th className="border border-black/30 px-1.5 py-1.5">شماره سریال</th>
+                <th className="border border-black/30 px-1.5 py-1.5">تطبیق</th>
                 <th className="border border-black/30 px-1.5 py-1.5">ساعت</th>
                 <th className="border border-black/30 px-1.5 py-1.5">شرح</th>
               </tr>
@@ -112,7 +121,7 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="border border-black/30 px-1.5 py-6 text-center text-black/60">
+                  <td colSpan={9} className="border border-black/30 px-1.5 py-6 text-center text-black/60">
                     سرویسی در این بازه ثبت نشده است
                   </td>
                 </tr>
@@ -124,7 +133,15 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
                     <td className="border border-black/30 px-1.5 py-1.5 font-medium">{r.path}</td>
                     <td className="border border-black/30 px-1.5 py-1.5 text-center whitespace-nowrap">{TYPE_LABELS[r.type]}</td>
                     <td className="border border-black/30 px-1.5 py-1.5 whitespace-nowrap">{r.repairman.fullName}</td>
-                    <td className="border border-black/30 px-1.5 py-1.5 text-center" dir="ltr">{r.partNumber || "—"}</td>
+                    <td className="border border-black/30 px-1.5 py-1.5 text-center whitespace-nowrap" dir="ltr">
+                      {r.partNumber || "—"}
+                      {r.removedSerial && (
+                        <span className="block text-[9px] text-black/60">({r.removedSerial})</span>
+                      )}
+                    </td>
+                    <td className={cn("border border-black/30 px-1 py-1.5 text-center text-[10px] whitespace-nowrap", r.serialMismatch && "font-bold bg-black/10")}>
+                      {r.serialMismatch ? "عدم انطباق" : r.removedSerial ? "مطابق" : "—"}
+                    </td>
                     <td className="border border-black/30 px-1.5 py-1.5 text-center">{r.laborHours != null ? faDigits(r.laborHours) : "—"}</td>
                     <td className="border border-black/30 px-1.5 py-1.5 leading-5">{r.description}</td>
                   </tr>
@@ -132,6 +149,16 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
               )}
             </tbody>
           </table>
+
+          {counts.mismatch > 0 && (
+            <div className="mt-3 border-2 border-black rounded p-2 text-[11px] leading-6">
+              <p className="font-bold">هشدار: {faNumber(counts.mismatch)} مورد عدم انطباق کد سریال</p>
+              <p className="text-black/70">
+                در سرویس‌های تعویض قطعه ثبت‌شده در این گزارش، شماره سریال قطعه نصب‌شده با آخرین سریال ثبت‌شده سامانه مطابقت نداشته است؛
+                موارد مربوط در ستون «تطبیق» مشخص شده‌اند و نیازمند پیگیری هستند.
+              </p>
+            </div>
+          )}
 
           <p className="text-[10px] text-black/60 mt-4 text-center">
             این گزارش به‌صورت خودکار از سامانه سرویس لوکوموتیو تهیه شده است.

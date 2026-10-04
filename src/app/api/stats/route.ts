@@ -12,7 +12,7 @@ export async function GET() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [trainCount, nodeCount, areaCount, userCount, recordCount, monthRecords, typeGroups, recent] =
+    const [trainCount, nodeCount, areaCount, userCount, recordCount, monthRecords, mismatchRecords, typeGroups, recent] =
       await Promise.all([
         db.train.count({ where: { active: true } }),
         db.partNode.count(),
@@ -20,6 +20,7 @@ export async function GET() {
         db.user.count({ where: { active: true } }),
         db.serviceRecord.count(),
         db.serviceRecord.count({ where: { date: { gte: monthStart } } }),
+        db.serviceRecord.count({ where: { serialMismatch: true } }),
         db.serviceRecord.groupBy({ by: ["type"], _count: true }),
         db.serviceRecord.findMany({
           take: 6,
@@ -41,6 +42,7 @@ export async function GET() {
         users: userCount,
         records: recordCount,
         monthRecords,
+        mismatchRecords,
         byType,
       },
       recent,

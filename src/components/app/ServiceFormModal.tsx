@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Wrench, Eye, Package, Loader2, ClipboardCheck, History, Info } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Wrench, Eye, Package, Loader2, ClipboardCheck, History, Info, Hash, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,7 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
   const [date, setDate] = useState(() => toISODate(new Date()));
   const [description, setDescription] = useState("");
   const [partNumber, setPartNumber] = useState("");
+  const [removedSerial, setRemovedSerial] = useState("");
   const [laborHours, setLaborHours] = useState("");
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,15 +61,31 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
       setDate(toISODate(new Date()));
       setDescription("");
       setPartNumber("");
+      setRemovedSerial("");
       setLaborHours("");
       loadHistory();
     }
   }, [open, loadHistory]);
 
+  // latest record (up to the chosen service date) that registered a serial
+  // = what the system expects to be installed at that moment
+  const lastSerialRecord = useMemo(
+    () => history.find((r) => r.partNumber && r.date.slice(0, 10) <= date) ?? null,
+    [history, date]
+  );
+  const lastSerial = lastSerialRecord?.partNumber ?? null;
+  const installedSerial = removedSerial.trim();
+  const mismatchActive =
+    type === "REPLACEMENT" && !!lastSerial && installedSerial !== "" && installedSerial !== lastSerial;
+
   const submit = async () => {
     if (!area) return;
     if (description.trim().length < 3) {
       toast({ title: "شرح سرویس الزامی است", description: "حداقل ۳ نویسه توضیح وارد کنید", variant: "destructive" });
+      return;
+    }
+    if (type === "REPLACEMENT" && !partNumber.trim()) {
+      toast({ title: "شماره سریال قطعه جدید الزامی است", description: "برای ثبت تعویض قطعه، سریال قطعه نو را وارد کنید", variant: "destructive" });
       return;
     }
     const hours = laborHours.trim() === "" ? null : Number(laborHours);
@@ -86,12 +103,14 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
           date,
           description: description.trim(),
           partNumber: partNumber.trim() || null,
+          removedSerial: type === "REPLACEMENT" ? installedSerial || null : null,
           laborHours: hours,
         }),
       });
       toast({ title: "سرویس ثبت شد", description: `برای «${area.name}» در ${train?.name}` });
       setDescription("");
       setPartNumber("");
+      setRemovedSerial("");
       setLaborHours("");
       await loadHistory();
     } catch (e) {
@@ -126,6 +145,20 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
           <p className="flex flex-wrap items-center gap-x-2">
             <span className="text-muted-foreground">ثبت‌کننده:</span>
             <span className="font-medium">{repairmanName}</span>
+          </p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t pt-1.5">
+            <Hash className="size-3.5 text-muted-foreground" aria-hidden />
+            <span className="text-muted-foreground">آخرین شماره سریال ثبت‌شده (تا تاریخ سرویس):</span>
+            {busy ? (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="در حال بارگذاری" />
+            ) : lastSerial ? (
+              <>
+                <span dir="ltr" className="font-bold tracking-wide">{lastSerial}</span>
+                <span className="text-xs text-muted-foreground">({formatJalali(lastSerialRecord!.date)})</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">هنوز سریالی ثبت نشده است</span>
+            )}
           </p>
         </div>
 
@@ -172,10 +205,73 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
             />
           </div>
 
+          {/* serial verification — only for part replacement */}
+          {type === "REPLACEMENT" && (
+            <div className="rounded-lg border-2 border-dashed border-amber-400/70 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-2.5">
+              <p className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="size-4" aria-hidden /> تطبیق شماره سریال پیش از تعویض
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sf-installed">شماره سریال قطعه نصب‌شده فعلی</Label>
+                  <Input
+                    id="sf-installed"
+                    dir="ltr"
+                    className="text-left"
+                    value={removedSerial}
+                    onChange={(e) => setRemovedSerial(e.target.value)}
+                    placeholder="سریال روی قطعه..."
+                  />
+                  <p className="text-[11px] text-muted-foreground">سریالی که روی قطعهِ نصب‌شده خوانده‌اید را وارد کنید تا با آخرین سریال ثبت‌شده تطبیق شود</p>
+                </div>
+                <div className="space-y-2">
+                  {!lastSerial ? (
+                    <div className="rounded-lg border bg-muted/40 text-muted-foreground p-2.5 text-xs leading-6">
+                      برای این قطعه هنوز سریالی در سامانه ثبت نشده است؛ تطبیق انجام نمی‌شود و ثبت سریال قطعه جدید مبنا قرار می‌گیرد.
+                    </div>
+                  ) : installedSerial === "" ? (
+                    <div className="rounded-lg border bg-muted/40 text-muted-foreground p-2.5 text-xs leading-6">
+                      سریال قطعه نصب‌شده فعلی را در کادر روبه‌رو وارد کنید تا با «{lastSerial}» تطبیق داده شود.
+                    </div>
+                  ) : mismatchActive ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 text-destructive p-2.5 text-xs leading-6" role="alert">
+                      <AlertTriangle className="size-4 shrink-0 mt-0.5" aria-hidden />
+                      <p>
+                        کد سریال قطعه نصب‌شده «{installedSerial}» با آخرین سریال ثبت‌شده «{lastSerial}» <b>مطابقت ندارد</b>.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-2.5 text-xs" role="status">
+                      <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+                      <p>کد سریال قطعه نصب‌شده با آخرین سریال ثبت‌شده مطابقت دارد.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* auto-activating mismatch option */}
+              <label
+                className={cn(
+                  "flex items-start gap-2 rounded-lg border p-2.5 text-xs leading-6 select-none",
+                  mismatchActive
+                    ? "border-amber-500 bg-amber-100/80 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200"
+                    : "border-border bg-muted/40 text-muted-foreground/70"
+                )}
+              >
+                <input type="checkbox" className="mt-1 accent-amber-600" checked={mismatchActive} readOnly />
+                <span>
+                  <b>گزینه «عدم انطباق کد سریال»</b>
+                  {mismatchActive
+                    ? " — فعال شد؛ این مورد هنگام ثبت سرویس در سوابق و گزارش‌ها درج می‌شود."
+                    : " — در صورت عدم تطابق کد سریال قطعه نصب‌شده با آخرین سریال ثبت‌شده، به‌صورت خودکار فعال می‌شود."}
+                </span>
+              </label>
+            </div>
+          )}
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sf-part" className={cn(type === "REPLACEMENT" && "text-primary font-bold")}>
-                شماره فنی قطعه {type === "REPLACEMENT" && "*"}
+                {type === "REPLACEMENT" ? "شماره سریال قطعه جدید" : "شماره فنی قطعه"} {type === "REPLACEMENT" && "*"}
               </Label>
               <Input
                 id="sf-part"
@@ -183,9 +279,11 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
                 className={cn("text-left", type === "REPLACEMENT" && "border-primary/60 ring-2 ring-primary/20")}
                 value={partNumber}
                 onChange={(e) => setPartNumber(e.target.value)}
-                placeholder="V-4712"
+                placeholder="V-4800"
               />
-              <p className="text-[11px] text-muted-foreground">شماره فنی قطعه جدید (برای تعویض قطعه)</p>
+              <p className="text-[11px] text-muted-foreground">
+                {type === "REPLACEMENT" ? "شماره سریال قطعه نو که نصب می‌شود (الزامی)" : "شماره فنی قطعه (اختیاری)"}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="sf-hours">ساعت کار</Label>
@@ -237,8 +335,17 @@ export default function ServiceFormModal({ open, onOpenChange, area, train, path
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{formatJalali(r.date)} — {r.repairman.fullName}</p>
                     <p className="text-xs text-muted-foreground line-clamp-2">{r.description}</p>
-                    {r.partNumber && <p className="text-[11px] text-muted-foreground" dir="ltr">Part: {r.partNumber}</p>}
+                    {(r.partNumber || r.removedSerial) && (
+                      <p className="text-[11px] text-muted-foreground" dir="ltr">
+                        {r.removedSerial ? `${r.removedSerial} → ${r.partNumber ?? "?"}` : `Part: ${r.partNumber}`}
+                      </p>
+                    )}
                   </div>
+                  {r.serialMismatch && (
+                    <span className="shrink-0 rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-600 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap">
+                      عدم انطباق سریال
+                    </span>
+                  )}
                   {r.laborHours != null && (
                     <Badge variant="outline" className="shrink-0">{faDigits(r.laborHours)} ساعت</Badge>
                   )}
