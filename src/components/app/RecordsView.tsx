@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, Loader2, RotateCcw, FileText, Search, ChevronDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { api, TYPE_LABELS, TYPE_BADGES, type RecordRow, type SessionUser, type T
 import { formatJalali, formatJalaliDateTime, faDigits, faNumber } from "@/lib/jalali";
 import { cn } from "@/lib/utils";
 import JalaliDateField from "./JalaliDateField";
+import ExcelIcon from "./ExcelIcon";
 import type { View } from "./Shell";
 
 interface Props {
@@ -23,10 +24,14 @@ interface Props {
   onNavigate: (view: View) => void;
 }
 
+/** serial-match filter state: all | only-mismatch | only-match */
+export type SerialFilter = "all" | "mismatch" | "match";
+
 export interface ReportFilters {
   from: string;
   to: string;
   type: string;
+  mismatch: SerialFilter;
 }
 
 export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
@@ -37,7 +42,8 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
   const [trainId, setTrainId] = useState("all");
   const [type, setType] = useState("all");
   const [repairmanId, setRepairmanId] = useState("all");
-  const [mismatchOnly, setMismatchOnly] = useState(false);
+  const [serial, setSerial] = useState<SerialFilter>("all");
+  const [exporting, setExporting] = useState(false);
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [from, setFrom] = useState("");
@@ -56,10 +62,11 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
     api<{ users: UserRow[] }>("/api/users").then((r) => setRepairmen(r.users)).catch(() => {});
   }, []);
 
-  const queryKey = `${trainId}|${type}|${repairmanId}|${qDebounced}|${from}|${to}|${mismatchOnly}`;
+  const queryKey = `${trainId}|${type}|${repairmanId}|${qDebounced}|${from}|${to}|${serial}`;
   const [loadedKey, setLoadedKey] = useState("");
 
-  useEffect(() => {
+  /** single source of truth for the list query AND the excel export */
+  const buildFilterParams = useCallback((): URLSearchParams => {
     const sp = new URLSearchParams();
     if (trainId !== "all") sp.set("trainId", trainId);
     if (type !== "all") sp.set("type", type);
@@ -67,7 +74,13 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
     if (qDebounced.trim()) sp.set("q", qDebounced.trim());
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
-    if (mismatchOnly) sp.set("mismatch", "true");
+    if (serial === "mismatch") sp.set("mismatch", "true");
+    if (serial === "match") sp.set("match", "true");
+    return sp;
+  }, [trainId, type, repairmanId, qDebounced, from, to, serial]);
+
+  useEffect(() => {
+    const sp = buildFilterParams();
     let alive = true;
     api<{ records: RecordRow[] }>(`/api/records?${sp.toString()}`)
       .then((res) => {
@@ -82,14 +95,46 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
         setLoadedKey(queryKey);
       });
     return () => { alive = false; };
-  }, [trainId, type, repairmanId, qDebounced, from, to, mismatchOnly, toast, queryKey]);
+  }, [buildFilterParams, toast, queryKey]);
 
   // records are stale (refetching) whenever the query key changed but hasn't finished loading
   const loaded = loadedKey === queryKey && records !== null;
 
   const resetFilters = () => {
-    setTrainId("all"); setType("all"); setRepairmanId("all"); setMismatchOnly(false); setQ(""); setQDebounced(""); setFrom(""); setTo("");
+    setTrainId("all"); setType("all"); setRepairmanId("all"); setSerial("all"); setQ(""); setQDebounced(""); setFrom(""); setTo("");
     if (searchTimer.current) clearTimeout(searchTimer.current);
+  };
+
+  const downloadExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/records/export?${buildFilterParams().toString()}`);
+      if (!res.ok) {
+        let msg = "";
+        try {
+          const j = (await res.json()) as { error?: string };
+          msg = j.error || "";
+        } catch { /* not json */ }
+        throw new Error(msg || "خطا در تولید فایل اکسل");
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("content-disposition") || "";
+      const m = /filename="?([^";]+)"?/i.exec(cd);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = m?.[1] || "service-records.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "فایل اکسل دانلود شد", description: "سوابق فیلترشدهٔ فعلی در قالب اکسل ذخیره شد" });
+    } catch (e) {
+      toast({ title: "خطا در دانلود اکسل", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const counts = useMemo(() => {
@@ -122,17 +167,18 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant={mismatchOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMismatchOnly((v) => !v)}
-            aria-pressed={mismatchOnly}
-            className={cn(mismatchOnly && "bg-amber-600 hover:bg-amber-700 text-white")}
+            variant="outline"
+            onClick={downloadExcel}
+            disabled={!loaded || (records?.length ?? 0) === 0 || exporting}
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950"
+            title="خروجی اکسل از سوابقِ فیلترشدهٔ فعلی"
           >
-            <AlertTriangle className="size-4" /> فقط عدم انطباق سریال
+            {exporting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ExcelIcon className="size-4" aria-hidden />}
+            {exporting ? "در حال تولید..." : "دانلود اکسل"}
           </Button>
           <Button
             disabled={trainId === "all" || !loaded || (records?.length ?? 0) === 0}
-            onClick={() => trainId !== "all" && onOpenReport(trainId, { from, to, type })}
+            onClick={() => trainId !== "all" && onOpenReport(trainId, { from, to, type, mismatch: serial })}
             title={trainId === "all" ? "ابتدا یک لوکوموتیو انتخاب کنید" : undefined}
           >
             <FileText className="size-4" /> گزارش چاپی لوکوموتیو
@@ -140,10 +186,10 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
         </div>
       </div>
 
-      {/* filters */}
+      {/* filters — 1 col on mobile, 2 at md, 3 at xl; every cell is wide enough for the 3-select Jalali picker */}
       <Card>
-        <CardContent className="p-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6 lg:items-end">
-          <div className="space-y-1.5">
+        <CardContent className="p-4 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">لوکوموتیو</Label>
             <Select value={trainId} onValueChange={setTrainId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -153,7 +199,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">نوع سرویس</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -165,7 +211,7 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">تعمیرکار</Label>
             <Select value={repairmanId} onValueChange={setRepairmanId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -177,18 +223,29 @@ export default function RecordsView({ user, onOpenReport, onNavigate }: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
+            <Label className="text-xs">تطبیق سریال</Label>
+            <Select value={serial} onValueChange={(v) => setSerial(v as SerialFilter)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">همه</SelectItem>
+                <SelectItem value="mismatch">فقط عدم انطباق سریال</SelectItem>
+                <SelectItem value="match">فقط مطابق</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">از تاریخ</Label>
             <JalaliDateField key={`from-${from}`} value={from} onChange={setFrom} />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs">تا تاریخ</Label>
             <JalaliDateField key={`to-${to}`} value={to} onChange={setTo} />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <Label className="text-xs" htmlFor="rec-q">جستجو</Label>
             <div className="flex gap-2">
-              <div className="relative flex-1">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute inset-y-0 end-2.5 size-4 text-muted-foreground self-center" aria-hidden />
                 <Input id="rec-q" value={q} onChange={(e) => onSearchChange(e.target.value)} placeholder="مسیر یا شرح..." className="pe-8" />
               </div>

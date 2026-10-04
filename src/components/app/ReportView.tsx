@@ -27,6 +27,8 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
     if (filters.from) sp.set("from", filters.from);
     if (filters.to) sp.set("to", filters.to);
     if (filters.type && filters.type !== "all") sp.set("type", filters.type);
+    if (filters.mismatch === "mismatch") sp.set("mismatch", "true");
+    if (filters.mismatch === "match") sp.set("match", "true");
     api<{ records: RecordRow[] }>(`/api/records?${sp.toString()}`)
       .then((r) => setRecords(r.records))
       .catch(() => setRecords([]));
@@ -44,6 +46,11 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
   const typeFilterText = filters.type && filters.type !== "all"
     ? ` — فقط ${TYPE_LABELS[filters.type as keyof typeof TYPE_LABELS]}`
     : "";
+  const mismatchFilterText = filters.mismatch === "mismatch"
+    ? " — فقط عدم انطباق سریال"
+    : filters.mismatch === "match"
+      ? " — فقط موارد مطابق"
+      : "";
 
   return (
     <div className="space-y-4">
@@ -100,7 +107,7 @@ export default function ReportView({ trainId, filters, onBack }: Props) {
             </div>
           </div>
           <p className="text-xs text-black/70 mb-3">
-            {rangeText}{typeFilterText} — جمع ساعت کار: {faDigits(totalHours)} ساعت
+            {rangeText}{typeFilterText}{mismatchFilterText} — جمع ساعت کار: {faDigits(totalHours)} ساعت
           </p>
 
           {/* table */}

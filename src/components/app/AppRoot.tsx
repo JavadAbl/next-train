@@ -20,7 +20,7 @@ export default function AppRoot() {
   const [builderTrainId, setBuilderTrainId] = useState<string | null>(null);
   const [navigatorTrainId, setNavigatorTrainId] = useState<string | null>(null);
   const [reportTrainId, setReportTrainId] = useState<string | null>(null);
-  const [reportFilters, setReportFilters] = useState<ReportFilters>({ from: "", to: "", type: "" });
+  const [reportFilters, setReportFilters] = useState<ReportFilters>({ from: "", to: "", type: "", mismatch: "all" });
 
   useEffect(() => {
     api<{ user: SessionUser | null }>("/api/auth/me")

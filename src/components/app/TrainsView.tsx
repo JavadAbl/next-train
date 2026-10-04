@@ -21,7 +21,7 @@ interface Props {
   user: SessionUser;
   onOpenBuilder: (trainId: string) => void;
   onOpenNavigator: (trainId: string) => void;
-  onOpenReport: (trainId: string, filters: { from: string; to: string; type: string }) => void;
+  onOpenReport: (trainId: string, filters: { from: string; to: string; type: string; mismatch: "all" | "mismatch" | "match" }) => void;
 }
 
 interface FormState {
@@ -191,7 +191,7 @@ export default function TrainsView({ user, onOpenBuilder, onOpenNavigator, onOpe
                       <Workflow className="size-4" /> ویرایش ساختار
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => onOpenReport(t.id, { from: "", to: "", type: "" })}>
+                  <Button size="sm" variant="outline" onClick={() => onOpenReport(t.id, { from: "", to: "", type: "", mismatch: "all" })}>
                     <FileText className="size-4" /> گزارش
                   </Button>
                   {canManage && (

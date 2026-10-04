@@ -65,3 +65,23 @@ Work Log:
 Stage Summary:
 - Feature complete: mandatory new-part serial for replacements, separate display of last recorded serial (date-relative), live server-verified mismatch detection with auto-activating option, mismatch visibility across records table (badge+filter), printable report (column+count+warning), dashboard banner
 - Demo DB currently: 14 records, 1 mismatch (سوپاپ چپ), 1 match (رینگ پیستون)
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: Fix overlapping report-filter inputs; add serial-mismatch filter to the report flow; add Excel-download button with an Excel icon (user request in Persian)
+
+Work Log:
+- Diagnosed the overlap: filter card used lg:grid-cols-6 (~150px/col) — the 3-select Jalali picker needs ~280px, so grid tracks overflowed and inputs visually sank into each other
+- RecordsView filter card rebuilt: grid-cols-1 md:grid-cols-2 xl:grid-cols-3 (each cell ≥300px) + min-w-0 on every cell; Jalali pickers now always fit
+- New «تطبیق سریال» filter (Select: همه / فقط عدم انطباق سریال / فقط مطابق) in the filter card — replaces the old duplicate header toggle button; one source of truth (buildFilterParams useCallback) drives both the list query and the Excel export
+- API: /api/records + /api/records/export gained ?match=true (removedSerial != null AND serialMismatch = false); mismatch=true existed already
+- ReportFilters type += mismatch: SerialFilter ("all"|"mismatch"|"match"); passed through AppRoot/TrainsView; ReportView applies it to the records query and shows it in the filter line («فقط عدم انطباق سریال» / «فقط موارد مطابق»)
+- Excel export: NEW /api/records/export (exceljs, bun add exceljs): RTL sheet (rightToLeft view), frozen title+meta+header rows (ySplit=3), amber header fill, mismatch rows amber-highlighted with bold «عدم انطباق سریال» cell, green «مطابق», autoFilter A3:K{n}, totals line (hours sum + mismatch count), filename service-records-{jalali-date}.xlsx; Jalali dates as compact sortable «۱۴۰۵/۰۸/۲۰» text
+- ExcelIcon.tsx: custom SVG (green sheet + white X — lucide has no Excel brand icon); «دانلود اکسل» outline button styled emerald, disabled while exporting/empty, success/error toasts; download via fetch → blob → anchor (parses Content-Disposition filename)
+- Verified: tsc src/ clean, eslint clean; curl match/mismatch filters (1+1 rows); read back both exported xlsx files with exceljs (scripts/verify-export.ts) — RTL, frozen, fills, bold, totals, autoFilter all PASS; agent-browser through the REAL preview domain at 1280/1024/768/390: rect-intersection check of all 12 filter controls = zero overlaps, zero card overflow (scripts/check-overlap.js); mismatch & match filters in UI; Excel button → network 200 → success toast; printable report with mismatch filter (1 row + warning + «فقط عدم انطباق سریال» in filter line); VLM visual check light+dark (OVERLAP: no, DATES: ok, EXCEL-BTN: ok, DEFECTS: none); dev.log only 200s (one benign HMR full-reload notice during editing)
+
+Stage Summary:
+- Filter card: overlap eliminated at every breakpoint; new serial-match filter applies to BOTH the records table and the printable report
+- Excel: one-click download of the currently filtered records (all filters honored) — styled RTL Persian sheet with mismatch highlighting
+- Files touched: RecordsView.tsx, ReportView.tsx, AppRoot.tsx, TrainsView.tsx, api/records/route.ts, NEW api/records/export/route.ts, NEW ExcelIcon.tsx; scripts/verify-export.ts + check-overlap.js kept for regression

@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const from = sp.get("from") || undefined;
     const to = sp.get("to") || undefined;
     const mismatchOnly = sp.get("mismatch") === "true";
+    const matchOnly = sp.get("match") === "true";
     const limit = Math.min(Number(sp.get("limit")) || 500, 1000);
 
     const records = await db.serviceRecord.findMany({
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest) {
         ...(to ? { date: { lte: parseISODate(to) } } : {}),
         ...(from && to ? { date: { gte: parseISODate(from), lte: parseISODate(to) } } : {}),
         ...(mismatchOnly ? { serialMismatch: true } : {}),
+        ...(matchOnly ? { removedSerial: { not: null }, serialMismatch: false } : {}),
       },
       include: {
         repairman: { select: { id: true, fullName: true } },
