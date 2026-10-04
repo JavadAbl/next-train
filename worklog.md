@@ -104,3 +104,22 @@ Work Log:
 Stage Summary:
 - Repository live at https://github.com/JavadAbl/next-train.git — branch main, 146 files, ~3.2 MB, full 6-commit history, demo DB included for out-of-the-box run
 - Sensitive/local files excluded (.env, dev.pid, node_modules, .next, dev.log, skills/)
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: Update seed data with more realistic photos (user request in Persian) — commit locally, DO NOT PUSH until user approves
+
+Work Log:
+- Wrote scripts/gen-realistic-demo.ts: 4 photorealistic industrial photos (1344x768) with composition constrained to the hotspot structure (cab left / hood center / bogies bottom; bank center / turbo top / oil pump bottom; valves top / pistons bottom; piston center with rings at crown + valves left/right); sharp metadata validation (aspect, size), 4 retries, optional per-key CLI filter
+- VLM layout analysis (scripts/vlm-layout-check.ts + loco follow-up): extracted actual part positions in percent coords per image; VLM pixel answers converted to percents; curated new boxes.json with non-overlapping, click-friendly boxes (locomotive: engine x29-72/y21-58, brake/bogies x14-85/y60-80, cab x10-28/y21-55; engine: bank x14-62/y31-61, turbo x18-36/y4-30, pump x20-40/y75-98; cylinders: pistons bottom y48-94, valve band top y2-30 split L/R; piston: rings x36-64/y13-32, left valve x8-34/y66-98, right valve x66-92/y66-98)
+- seed.ts: added --force flag (deletes existing demo train — cascade removes nodes/areas/records — then reseeds identical records incl. the serial-mismatch demo); reseeded DB: 4 nodes, 12 areas, 13 records (1 mismatch), uploads overwritten
+- QA round 1 through preview domain (agent-browser, repairman1): drilled all 4 levels, screenshots; VLM shot-check passed levels 1/2/4 but flagged level 3 — first cylinders photo had NO recognizable poppet valves (neutral top-to-bottom tiebreak: bores+valve-seats top, pistons bottom, valves absent)
+- Regenerated cylinders.png only (explicit poppet-valve prompt: springs+poppets top, bores/pistons bottom); tiebreak confirmed valves top y0-25 + pistons y50-75; tightened valve band to y2-30 and pistons to y48-94; reseeded again
+- QA round 2: level-3 screenshot re-check — all YES, no overlap/label issues; zero console errors, dev.log 0 errors, src/ type-clean
+- Committed locally 1b74971 — intentionally NOT pushed (awaiting user approval)
+
+Stage Summary:
+- Seed data now uses realistic photos; all 12 hotspots verified visually aligned at every level via browser + VLM
+- QA screenshots in assets/screens/v2-level*.png; regen/reseed/QA tooling kept in scripts/
+- Local repo is 1 commit ahead of origin/main — push pending user confirmation
