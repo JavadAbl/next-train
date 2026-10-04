@@ -123,3 +123,23 @@ Stage Summary:
 - Seed data now uses realistic photos; all 12 hotspots verified visually aligned at every level via browser + VLM
 - QA screenshots in assets/screens/v2-level*.png; regen/reseed/QA tooling kept in scripts/
 - Local repo is 1 commit ahead of origin/main — push pending user confirmation
+
+---
+Task ID: 7
+Agent: main (Super Z)
+Task: Add sub-parts under کابین راننده and سیستم ترمز + fix hotspots-appearing-before-image bug with a loading spinner (user request in Persian) — commit locally, no push
+
+Work Log:
+- HotspotImage.tsx rework: image-load state machine (loading/ready/error). Hotspots + draft rect render ONLY when ready (was rendering immediately while <img> still fetching — the reported bug); centered spinner overlay «در حال بارگذاری تصویر…» with min-h container while loading; error state «تصویر بارگذاری نشد»; draw-mode pointer down blocked until ready. Reset via official React adjust-state-during-render pattern (prevSrc) + key={image} on <img> so cached images also fire onLoad after remount. Kept eslint clean (initial useEffect version tripped react-hooks/set-state-in-effect).
+- 2 new photorealistic photos via gen-realistic-demo.ts: cab interior (windshield / gauge panel / control desk bands) and air-brake equipment (compressor / reservoir / brake cylinder in a row). First brake render had overlapping diagonal staging — regenerated with strict "neat horizontal row, one third each" prompt; VLM confirmed clean left/middle/right split.
+- boxes.json += cab (3 horizontal bands y12-40/42-61/63-98) and brake (3 vertical thirds x2-32/36-62/64-97), calibrated from VLM percent answers.
+- seed.ts: child nodes under سیستم ترمز and کابین راننده (each with 3 leaf areas); moved the 2 old parent-level records to matching leaf areas (paths updated to level-2) and added 4 new records (compressor REPAIR, reservoir VISIT, control-desk REPAIR, wiper REPLACEMENT WP-330). Demo now: 6 nodes, 18 areas, 13 leaf parts, 17 records, 1 mismatch.
+- Browser QA through preview domain: level-1 count shows «۱۳ قطعه سرویس‌پذیر»; cab & brake levels render 3 hotspots each; service form on «تابلو دستگاه‌ها» shows full path + history. VLM QA of both new level screenshots: all placements YES, no overlaps; spinner screenshot: spinner visible, no floating hotspots.
+- Deterministic spinner proof: (a) network route abort on seed-cab.png → error message shown, hotspotCount=0; (b) CDP Fetch-domain pauser (scripts/cdp-delay-image.ts) held the cab image request for 6s → mid-load probe: spinner=true, hotspots=0, imgComplete=false; after release: 3 hotspots, natW restored; (c) cached re-entry instantly ready. CDP network-throttle attempt failed (per-session emulation) — Fetch pause is the reliable technique, kept as a script.
+- Repo hygiene: set core.fileMode=false (a process had flipped modes 644→755 on unrelated files, creating noise diffs).
+- Committed locally 10f29fc — still NOT pushing (user approval pending from Task 6).
+
+Stage Summary:
+- Cab & brake now drill down one level (6 new leaf parts); engine branch unchanged (4 levels)
+- Reported UX bug fixed and proven fixed with DOM probes + VLM visual checks at every state (loading/error/ready/cached)
+- Local repo is 3 commits ahead of origin/main — push still awaiting user confirmation
