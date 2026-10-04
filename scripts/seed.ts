@@ -48,10 +48,16 @@ async function main() {
   console.log("users ready");
 
   // ---------- demo train ----------
+  const FORCE = process.argv.includes("--force");
   const existing = await db.train.findFirst({ where: { name: TRAIN_NAME } });
   if (existing) {
-    console.log("demo train already seeded, skipping");
-    return;
+    if (!FORCE) {
+      console.log("demo train already seeded, skipping (use --force to reseed)");
+      return;
+    }
+    // cascade removes nodes, areas and records of the old demo train
+    await db.train.delete({ where: { id: existing.id } });
+    console.log("old demo train deleted (--force)");
   }
 
   const train = await db.train.create({
