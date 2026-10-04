@@ -52,3 +52,9 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# runtime pid files
+*.pid
+
+# keep the env template tracked (while .env itself stays local)
+!.env.example
