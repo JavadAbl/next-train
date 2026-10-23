@@ -209,3 +209,22 @@ Stage Summary:
 - S3 path is blocked only from THIS sandbox IP (Neon edge WAF) — from Vercel (AWS egress) it is expected to work; user can also verify from their own machine with the credentials in .env
 - neon.ts/.neon committed as infrastructure-as-code; API key + credentials live only in .env (gitignored)
 - Remaining for user: push to GitHub, import repo into Vercel with the env vars from .env (DATABASE_URL, DATABASE_URL_UNPOOLED, AWS_*, AUTH_SECRET), deploy — first production upload will prove S3 mode end-to-end
+
+---
+Task ID: 11
+Agent: main (Super Z)
+Task: Push approved — publish pending local commits (Task 9 PostgreSQL migration + Task 10 Neon integration) to GitHub (user: "push")
+
+Work Log:
+- Reconciled state: Task 10 was already complete; local main ahead of origin/main by 3 commits (ccd9261 T9, 47e5332 fetched-docs, 5494e69 T10); remote HEAD c3b2bc9; GitHub PAT still valid (ls-remote succeeded)
+- Pre-push audit of the full net diff (56 files, +9305/−114): NO .env, NO napi_* API key, NO AKIA/nsk_live_* keys, NO real Neon connection strings and NO AUTH_SECRET value anywhere in the tree — all secrets live only in .env (gitignored); the only committed credential is the documented sandbox-local dev password (postgresql://train:train_dev_pw@127.0.0.1, portable PG bound to loopback, intentional for reproducible local runs)
+- Found repo-hygiene regressions vs documented intent: db/custom.db still tracked (obsolete SQLite binary; T9 log claimed untracking that never landed), .agents/skills/* (35 files, ~7k lines of Neon agent docs) + skills-lock.json swept into commit 5494e69, and .gitignore was mangled — `!.env.example` and `/db/` had collapsed into one broken line `!.env.example/db/` so BOTH rules were dead
+- Cleanup commit: git rm --cached db/custom.db; git rm -r --cached .agents skills-lock.json; .gitignore repaired and extended (!.env.example restored, /db/, /.agents/, /skills-lock.json); root skill-*.md and tool-results/ were already net-zero in the range (added then deleted — no action needed)
+- Appended this worklog entry and committed the cleanup locally (c886fce, then amended with this correction)
+- PUSH FAILED: GitHub rejected the embedded PAT — "Invalid username or token. Password authentication is not supported for Git operations."; the same token returns 401 on api.github.com (/user and /repos) while ls-remote had SUCCEEDED minutes earlier during the audit → the fine-grained PAT was revoked or expired in that window; no alternative credentials exist in the sandbox (no GH env vars, no credential helper, no ~/.git-credentials, no gh CLI); one retry failed identically
+- Fallback prepared for the user: full-history bundle at download/next-train-main.bundle (clone → point remote at github with a fresh PAT → push), so the pending commits can be published without re-doing any work
+
+Stage Summary:
+- Local repo is final and clean: 4 commits ready on top of origin/main@c3b2bc9 (ccd9261 T9, 47e5332 docs, 5494e69 T10, Task 11 cleanup); once pushed, the remote tree will contain no sandbox tooling, no SQLite binary, no secrets
+- BLOCKED on credentials: push needs a fresh GitHub PAT from the user (fine-grained, repo next-train only, Contents: Read & Write, short expiry recommended)
+- After push, remaining steps unchanged: import into Vercel with env vars from local .env (DATABASE_URL pooled, DATABASE_URL_UNPOOLED, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3, AWS_REGION, AUTH_SECRET) and deploy; the first production image upload will prove S3 mode end-to-end (Neon's storage edge blocks the sandbox egress IP, but Vercel egress is AWS and expected to pass)

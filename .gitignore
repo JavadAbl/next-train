@@ -60,7 +60,19 @@ server.log
 *.pid
 
 # keep the env template tracked (while .env itself stays local)
-!.env.example/db/
+!.env.example
+
+# obsolete local SQLite db (app is on Postgres now) — never commit
+/db/
+
+# Neon CLI link file — machine-local (ids only, no credentials)
 .neon
+
+# sandbox agent tooling / fetched docs / scratch — never commit
 /.neon-skills/
 /tool-results/
+/.agents/
+/skills-lock.json
+
+# user-facing download artifacts (offline git bundle etc.) — never commit
+/download/*.bundle
