@@ -181,3 +181,31 @@ Stage Summary:
 - App is now Vercel-ready: hosted-Postgres (Neon) + DB-stored uploads + postinstall prisma generate; production build passes with all 20 routes
 - Sandbox dev environment runs on local portable PostgreSQL via .zscripts/pg.sh (survives restarts through dev.sh); ready to switch to the user's Neon URL once provided
 - Next step for user: create free Neon project → set DATABASE_URL (pooled) + AUTH_SECRET in Vercel → run db push + seed with direct URL (I can run these from the sandbox if the URL is shared) → deploy
+
+---
+Task ID: 10
+Agent: main (Super Z)
+Task: Set up the app on the user's Neon project (rapid-math-15591303) — Postgres + Object Storage, per the fetched Neon agent skill and user's numbered instructions
+
+Work Log:
+- Fetched and read the official Neon agent skills: neon (parent), neon-postgres, neon-object-storage from https://neon.com/.well-known/agent-skills/...
+- Installed Neon CLI 8.11.0 globally (npm i -g neon@latest); `neon me` not allowed for org API keys but orgs list confirmed access
+- User supplied an org API key after the browser OAuth path was unusable from the sandbox
+- Ran `neon init -y --org-id org-rough-cloud-79631716 --project-id rapid-math-15591303 --branch production --services postgres,object-storage`: created neon.ts, .neon link, pulled DATABASE_URL (pooled) + DATABASE_URL_UNPOOLED (direct) into .env
+- `neon config plan` → +bucket assets; `neon deploy` → bucket created + AWS_* env vars pulled (project region eu-central-1, storage supported). User's own console-made `uploads` bucket also present
+- Prisma schema: added `directUrl = env("DATABASE_URL_UNPOOLED")` (Neon best practice: pooled for app, direct for migrations)
+- Wired Object Storage: installed @aws-sdk/client-s3; new src/lib/storage.ts (path-style S3 client, putImage/getImage/newImageKey, all defensive); Upload model now stores S3 object key + optional Postgres bytes fallback + size
+- S3 403 investigation: bucket exists, credentials have storage:read+write scopes, DNS fine, clock in sync — but EVERY request (SDK, CLI, curl, presigned, all 3 resolved IPs, HTTP/1.1+2) is rejected by `server: awselb/2.0` 403 before reaching the storage service (storage logs show zero object operations; only the two create_bucket entries). Conclusion: Neon's storage edge blocks the sandbox egress IP (47.57.242.119). Neon Postgres IS reachable from the sandbox (db push + seed + app traffic all work)
+- Minted a fresh credential `train-app` (storage:read+write) via `neon credentials create` — same edge 403, confirming the IP-block diagnosis
+- Implemented dual-mode image storage (graceful, no data loss): upload route tries S3 first; on failure stores webp bytes in Postgres (Upload.bytes). Serve route streams from S3 when key exists, else from DB bytes. Response includes storage:"s3"|"db" for observability
+- `bunx prisma db push` + `bun scripts/seed.ts` against Neon production branch: tables created, demo data seeded (6 nodes / 18 areas / 17 records / 1 mismatch)
+- Removed files-sdk + presigned-post deps (kept raw AWS SDK, leaner and sufficient)
+- VERIFIED: tsc src/ clean; `bun run build` passes (all routes); production standalone server E2E on Neon: login 200, stats 200 (seeded data), image upload 200 → storage:"db" fallback active in sandbox, serve 200 (1344x768 webp); browser E2E through preview domain on Neon Postgres: login → navigator → 3 hotspot level-1 → engine level (image + 3 hotspots, zero console errors). S3-mode E2E cannot be proven from the sandbox (edge IP block) — will be proven on Vercel where egress is AWS
+- Docs: README Vercel section rewritten for the actual Neon project (neon.ts workflow, full env var table incl. AWS_*, dual-mode storage note); .env.example documents all Neon vars
+- Cleaned test upload rows; dev server restarted and healthy on Neon
+
+Stage Summary:
+- App runs fully on Neon Postgres (production branch) in both dev and production build; Object Storage wired with automatic Postgres-bytes fallback so uploads never fail
+- S3 path is blocked only from THIS sandbox IP (Neon edge WAF) — from Vercel (AWS egress) it is expected to work; user can also verify from their own machine with the credentials in .env
+- neon.ts/.neon committed as infrastructure-as-code; API key + credentials live only in .env (gitignored)
+- Remaining for user: push to GitHub, import repo into Vercel with the env vars from .env (DATABASE_URL, DATABASE_URL_UNPOOLED, AWS_*, AUTH_SECRET), deploy — first production upload will prove S3 mode end-to-end

@@ -3,14 +3,17 @@ import sharp from "sharp";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handleError, ok, fail } from "@/lib/api";
+import { putImage, newImageKey } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 15 * 1024 * 1024; // UI advertises 15MB
-const MAX_DIM = 2400; // cap oversized diagrams, keeps DB rows lean
+const MAX_DIM = 2400; // cap oversized diagrams
 
-/** Upload a diagram image — normalized to webp and stored in the DB (Upload model)
- *  so it also works on serverless hosts with read-only filesystems (Vercel). */
+/** Upload a diagram image — normalized to webp, then stored in Neon Object
+ *  Storage (S3-compatible bucket "assets"); when the bucket is unreachable from
+ *  this runtime's network the bytes fall back to Postgres (Upload.bytes).
+ *  Served through /api/uploads/[id] either way. */
 export async function POST(req: NextRequest) {
   try {
     await requireUser("ADMIN", "OPERATOR");
@@ -29,12 +32,19 @@ export async function POST(req: NextRequest) {
       if ((meta.width ?? 0) > MAX_DIM || (meta.height ?? 0) > MAX_DIM) {
         pipeline = pipeline.resize({ width: MAX_DIM, height: MAX_DIM, fit: "inside" });
       }
-      const webp = await pipeline.webp({ quality: 82 }).toBuffer();
+      const webp = new Uint8Array(await pipeline.webp({ quality: 82 }).toBuffer());
+
+      const key = newImageKey("webp");
+      const storedKey = await putImage(key, webp, "image/webp"); // null → S3 unreachable
+
       const upload = await db.upload.create({
-        data: { mime: "image/webp", bytes: new Uint8Array(webp) },
+        data: storedKey
+          ? { key: storedKey, mime: "image/webp", size: webp.byteLength }
+          : { key: null, mime: "image/webp", bytes: webp, size: webp.byteLength },
       });
-      return ok({ url: `/api/uploads/${upload.id}` }, 201);
-    } catch {
+      return ok({ url: `/api/uploads/${upload.id}`, storage: storedKey ? "s3" : "db" }, 201);
+    } catch (e) {
+      console.error("[upload]", e);
       return fail("پردازش تصویر ناموفق بود — فایل تصویری معتبر نیست");
     }
   } catch (err) {

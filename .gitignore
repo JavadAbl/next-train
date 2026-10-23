@@ -61,3 +61,6 @@ server.log
 
 # keep the env template tracked (while .env itself stays local)
 !.env.example/db/
+.neon
+/.neon-skills/
+/tool-results/

@@ -59,49 +59,47 @@ bun run dev            # اجرا روی http://localhost:3000
 
 ## استقرار روی Vercel
 
-> **چرا خطای اتصال به دیتابیس می‌گیرید؟** این پروژه قبلاً از SQLite (فایل محلی) استفاده می‌کرد. در ورسل توابع سرورلس فایل‌سیستم موقت و فقط-خواندنی دارند؛ دیتابیس فایلی آنجا کار نمی‌کند. پروژه اکنون روی **PostgreSQL** است و به یک دیتابیس ابری نیاز دارد.
+> **چرا خطای اتصال به دیتابیس می‌گیرید؟** این پروژه قبلاً از SQLite (فایل محلی) استفاده می‌کرد. در ورسل توابع سرورلس فایل‌سیستم موقت و فقط-خواندنی دارند؛ دیتابیس فایلی آنجا کار نمی‌کند. پروژه اکنون روی **Neon Postgres** است و تصاویر آپلودی در **Neon Object Storage** (باکت S3-سازگار `assets`) ذخیره می‌شوند.
 
-### گام ۱ — ساخت دیتابیس ابری (رایگان)
+### گام ۱ — پروژهٔ Neon (از قبل آماده است)
 
-1. در [neon.tech](https://neon.tech) ثبت‌نام کنید و یک پروژه بسازید (یا از داشبورد ورسل: **Storage → Create Database → Neon Postgres**).
-2. از داشبورد Neon دو رشتهٔ اتصال بردارید:
-   - **Pooled** (با `-pooler` در هاست) → برای متغیر محیطی ورسل
-   - **Direct** (بدون `-pooler`) → برای ساخت جداول و سید
+پروژهٔ Neon شما: `rapid-math-15591303` (org `org-rough-cloud-79631716`، برنچ `production`، منطقهٔ `eu-central-1`) شامل Postgres و باکت `assets` است. مدیریت زیرساخت با فایل `neon.ts` انجام می‌شود:
+
+```bash
+neon deploy          # اعمال neon.ts (بافت‌ها) + کشیدن envها به .env
+neon config status   # وضعیت زندهٔ برنچ
+```
+
+جداول و دادهٔ دمو از قبل روی برنچ production ساخته شده‌اند (`prisma db push` + `scripts/seed.ts` اجرا شده است).
 
 ### گام ۲ — متغیرهای محیطی در ورسل
 
-در **Settings → Environment Variables** پروژهٔ ورسل این دو متغیر را اضافه کنید (برای محیط Production و Preview):
+در **Settings → Environment Variables** پروژهٔ ورسل این متغیرها را اضافه کنید (مقادیر از فایل `.env` محلی یا خروجی `neon env pull`):
 
 | متغیر | مقدار |
 |---|---|
-| `DATABASE_URL` | رشتهٔ اتصال **Pooled** + `?sslmode=require&pgbouncer=true&connection_limit=1` |
+| `DATABASE_URL` | رشتهٔ اتصال **Pooled** (با `-pooler`) + `sslmode=require` |
+| `DATABASE_URL_UNPOOLED` | رشتهٔ اتصال **Direct** (بدون `-pooler`) — برای directUrl پرایسما |
+| `AWS_ENDPOINT_URL_S3` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | اعتبارنامه‌های Object Storage (باکت assets) |
 | `AUTH_SECRET` | یک رشتهٔ تصادفی بلند (مثلاً ۶۴ کاراکتر هگز) |
 
-### گام ۳ — ساخت جداول و دادهٔ دمو
+### گام ۳ — استقرار
 
-یک بار از سیستم خودتان (یا همان محیط توسعه) روی دیتابیس ابری:
-
-```bash
-# توجه: رشتهٔ Direct (بدون -pooler)
-DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require" bunx prisma db push
-DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require" bun scripts/seed.ts
-```
-
-### گام ۴ — استقرار
-
-مخزن را به ورسل وصل کنید (Import Git Repository) و Deploy بزنید. Build به‌صورت خودکار `prisma generate` را اجرا می‌کند.
+مخزن را به ورسل وصل کنید (Import Git Repository) و Deploy بزنید. Build به‌صورت خودکار `prisma generate` را اجرا می‌کند (postinstall).
 
 **نکته‌های مهم:**
 
-- تصاویر نقشه‌هایی که اپراتورها بارگذاری می‌کنند، به‌صورت بایت در خود دیتابیس ذخیره و از مسیر `/api/uploads/[id]` سرو می‌شوند؛ بنابراین محدودیت حجم آپلود عملی ~۴.۵ مگابایت (سقف بدنهٔ درخواست در ورسل) است.
+- **ذخیرهٔ تصاویر دوحالته است:** اگر باکت در دسترس باشد تصویر در باکت `assets` ذخیره می‌شود (کلید شیء در جدول `Upload`)، وگرنه بایت‌های تصویر در خود Postgres (ستون `Upload.bytes`) — در هر دو حالت تصویر از مسیر `/api/uploads/[id]` سرو می‌شود و هیچ داده‌ای از دست نمی‌رود.
+- برای ساخت اعتبارنامهٔ جدید Object Storage: `neon credentials create --scope storage:read --scope storage:write --name <name>`
 - تصاویر دموی seed به‌صورت فایل استاتیک داخل مخزن (`public/uploads/`) قرار دارند و نیازی به کار اضافه ندارند.
-- سوابق سرویس واقعی را در دیتابیس ابری نگه دارید؛ در صورت اجرای دوبارهٔ seed روی دیتابیس پرشده، فقط در صورت وجود لوکوموتیو دموی هم‌نام skip می‌شود (با `--force` بازسازی کامل می‌شود).
+- اگر seed را دوباره اجرا کنید، در صورت وجود لوکوموتیو دموی هم‌نام skip می‌شود (با `--force` بازسازی کامل).
 
 ## ساختار پروژه
 
 ```
 prisma/schema.prisma   # مدل داده: User, Train, PartNode, Area, ServiceRecord, Upload
-src/lib/               # احراز هویت، تاریخ جلالی، کلاینت API
+neon.ts                # زیرساخت به‌مثابه کد: باکت Object Storage + سیاست برنچ‌ها
+src/lib/               # احراز هویت، تاریخ جلالی، کلاینت API، helper ذخیره‌سازی S3
 src/app/api/           # مسیرهای REST (auth, trains, nodes, areas, records, export, upload, uploads, users, stats)
 src/components/app/    # کامپوننت‌های سامانه (ناوگر، سازندهٔ نقشه، فرم سرویس، سوابق، گزارش، کاربران)
 src/components/ui/     # کامپوننت‌های پایه (shadcn/ui)

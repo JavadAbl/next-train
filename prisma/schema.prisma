@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")            // pooled (-pooler) for app traffic
+  directUrl = env("DATABASE_URL_UNPOOLED")   // direct for migrations (Prisma requirement on Neon)
 }
 
 // role: "ADMIN" | "OPERATOR" | "REPAIRMAN" (validated by zod at API layer)
@@ -91,12 +92,18 @@ model ServiceRecord {
   @@index([date])
 }
 
-// Runtime-uploaded diagram images stored as bytes in the DB so the app also
-// works on read-only serverless filesystems (Vercel). Served by /api/uploads/[id].
+// Runtime-uploaded diagram images. Primary store is Neon Object Storage
+// (S3-compatible bucket "assets" — the row keeps only the object key, so the row
+// and the object live on the same Neon branch and never drift). When the bucket
+// is unreachable from the runtime network (e.g. restricted dev environments),
+// the API falls back to storing the bytes in Postgres (bytes column). Served by
+// /api/uploads/[id] which streams from whichever store holds the image.
 // Seed images stay as static files under public/uploads/ (committed to the repo).
 model Upload {
   id        String   @id @default(cuid())
+  key       String?  @unique // S3 object key in the assets bucket (null = DB-stored)
   mime      String
-  bytes     Bytes
+  bytes     Bytes?   // fallback store: image bytes kept in Postgres when S3 is unreachable
+  size      Int      // byte size (for reporting)
   createdAt DateTime @default(now())
 }
