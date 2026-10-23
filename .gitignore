@@ -53,8 +53,11 @@ server.log
 # Skills directory
 /skills/
 
+# local portable PostgreSQL (binaries + data dir) — dev-only, never commit
+/.tools/
+
 # runtime pid files
 *.pid
 
 # keep the env template tracked (while .env itself stays local)
-!.env.example
+!.env.example/db/

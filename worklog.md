@@ -157,3 +157,27 @@ Work Log:
 
 Stage Summary:
 - Tasks 6 (realistic seed photos) and 7 (cab/brake sub-parts + image loading spinner) are now live on GitHub
+
+---
+Task ID: 9
+Agent: main (Super Z)
+Task: Fix Vercel deployment database-connection error (user request in Persian) — migrate SQLite → PostgreSQL, make uploads serverless-safe
+
+Work Log:
+- Root cause explained: SQLite is a file DB; Vercel serverless functions have ephemeral read-only filesystems → the old `file:../db/custom.db` URL can never connect there
+- prisma/schema.prisma: provider sqlite → postgresql (all model types ported cleanly) + new `Upload` model (mime + bytes Bytes) for runtime image storage inside the DB
+- Discovered the upload API never existed: ImageUpload.tsx called POST /api/upload but no such route was present — built it from scratch the Vercel-safe way
+- NEW src/app/api/upload/route.ts: ADMIN/OPERATOR guard, 15MB cap, sharp normalize (EXIF auto-orient, ≤2400px, webp q82) → bytes stored in Postgres Upload row → returns { url: "/api/uploads/<cuid>" }
+- NEW src/app/api/uploads/[id]/route.ts: serves DB bytes with content-type + immutable cache headers; 404s on bad/missing ids
+- Fixed latent bug in src/lib/client.ts api(): it force-set Content-Type: application/json on FormData bodies, which would have broken multipart uploads — now skipped for FormData
+- src/lib/db.ts: query logging now dev-only (clean production logs); package.json: added postinstall "prisma generate" (needed on Vercel build)
+- Local verification stack (no root in sandbox): downloaded zonky portable PostgreSQL 16.4 binaries into .tools/ (gitignored), wrote .zscripts/pg.sh (initdb/create-db/start/stop manager) and hooked it into dev.sh; dev.sh now also force-sources .env over the sandbox-injected stale DATABASE_URL env var (which was shadowing .env — found via P1012 protocol error)
+- .env/.env.example switched to PostgreSQL URLs (local dev + Neon examples with pooled/direct guidance); untracked obsolete db/custom.db and added /db/ to .gitignore
+- README: tech stack updated, local quick-start rewritten for Postgres, NEW full "استقرار روی Vercel" section (Neon creation, pooled vs direct connection strings, Vercel env vars DATABASE_URL/AUTH_SECRET, db push + seed commands, deploy, notes)
+- VERIFIED end-to-end: prisma db push + seed on PG (6 nodes / 18 areas / 17 records / 1 mismatch — identical to before); dev + PRODUCTION standalone build both healthy; browser E2E through preview domain: login (operator), dashboard stats, trains list, create-train dialog with REAL image upload via UI (multipart → webp 1344×768 → /api/uploads/<id> → preview rendered naturalWidth=1344 → node persisted with DB image path), delete-train cascade via UI, navigator 4-level drill to compressor service form; upload API edge cases (401 unauth, 404 bad/missing id); Excel export 200/valid xlsx; tsc src/ clean (fixed one Buffer→Uint8Array Prisma type), eslint clean, zero console/page errors
+- Cleaned all test artifacts (test train, 2 test upload rows) — demo DB pristine; committed locally, push awaiting approval
+
+Stage Summary:
+- App is now Vercel-ready: hosted-Postgres (Neon) + DB-stored uploads + postinstall prisma generate; production build passes with all 20 routes
+- Sandbox dev environment runs on local portable PostgreSQL via .zscripts/pg.sh (survives restarts through dev.sh); ready to switch to the user's Neon URL once provided
+- Next step for user: create free Neon project → set DATABASE_URL (pooled) + AUTH_SECRET in Vercel → run db push + seed with direct URL (I can run these from the sandbox if the URL is shared) → deploy

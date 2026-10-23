@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -89,4 +89,14 @@ model ServiceRecord {
   @@index([areaId])
   @@index([repairmanId])
   @@index([date])
+}
+
+// Runtime-uploaded diagram images stored as bytes in the DB so the app also
+// works on read-only serverless filesystems (Vercel). Served by /api/uploads/[id].
+// Seed images stay as static files under public/uploads/ (committed to the repo).
+model Upload {
+  id        String   @id @default(cuid())
+  mime      String
+  bytes     Bytes
+  createdAt DateTime @default(now())
 }

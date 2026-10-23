@@ -82,7 +82,9 @@ export interface UserRow {
 
 export async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {};
-  if (init?.body) headers["Content-Type"] = "application/json";
+  // FormData bodies must NOT get a manual JSON content-type — the browser needs
+  // to set multipart/form-data with its own boundary (image uploads).
+  if (init?.body && !(init.body instanceof FormData)) headers["Content-Type"] = "application/json";
   const res = await fetch(path, { ...init, headers });
   let data: Record<string, unknown> = {};
   try {

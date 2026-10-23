@@ -41,38 +41,72 @@
 
 ## فناوری‌ها
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma + SQLite · ExcelJS · تاریخ جلالی با الگوریتم jalaali (اعتبارسنجی‌شده در برابر `Intl` fa-IR)
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma + **PostgreSQL** · ExcelJS · تاریخ جلالی با الگوریتم jalaali (اعتبارسنجی‌شده در برابر `Intl` fa-IR)
 
-## راه‌اندازی سریع
+## راه‌اندازی سریع (محلی)
 
-پیش‌نیاز: [Bun](https://bun.sh)
+پیش‌نیاز: [Bun](https://bun.sh) و یک PostgreSQL در دسترس (محلی یا ابری مثل [Neon](https://neon.tech))
 
 ```bash
-bun install            # نصب وابستگی‌ها
-cp .env.example .env   # آدرس دیتابیس SQLite
-bun run db:generate    # تولید Prisma Client
+bun install            # نصب وابستگی‌ها (Prisma Client هم تولید می‌شود)
+cp .env.example .env   # DATABASE_URL را به Postgres خود اشاره دهید
+bun run db:push        # ساخت جداول
+bun scripts/seed.ts    # درج دادهٔ دمو (قابل اجرای مکرر)
 bun run dev            # اجرا روی http://localhost:3000
 ```
 
-دیتابیس `db/custom.db` همراه مخزن، شامل دادهٔ دمو است: لوکوموتیو DL-500 با ۶ نقشه و ۱۸ ناحیهٔ تعاملی — سلسله‌مراتب ۴ سطحی موتور (نمای کلی ← موتور دیزل ← سیلندرها ← پیستون ← سوپاپ‌ها/رینگ) به‌همراه زیرقطعات سیستم ترمز (کمپرسور هوا، مخزن هوای فشرده، سیلندر و کفشک ترمز) و کابین راننده (شیشه جلو، تابلو دستگاه‌ها، اهرم فرمان) — و ۱۷ سابقهٔ نمونه شامل یک مورد عدم انطباق سریال.
+دادهٔ دمو: لوکوموتیو DL-500 با ۶ نقشه و ۱۸ ناحیهٔ تعاملی — سلسله‌مراتب ۴ سطحی موتور (نمای کلی ← موتور دیزل ← سیلندرها ← پیستون ← سوپاپ‌ها/رینگ) به‌همراه زیرقطعات سیستم ترمز (کمپرسور هوا، مخزن هوای فشرده، سیلندر و کفشک ترمز) و کابین راننده (شیشه جلو، تابلو دستگاه‌ها، اهرم فرمان) — و ۱۷ سابقهٔ نمونه شامل یک مورد عدم انطباق سریال.
 
-برای بازسازی دیتابیس از صفر:
+## استقرار روی Vercel
+
+> **چرا خطای اتصال به دیتابیس می‌گیرید؟** این پروژه قبلاً از SQLite (فایل محلی) استفاده می‌کرد. در ورسل توابع سرورلس فایل‌سیستم موقت و فقط-خواندنی دارند؛ دیتابیس فایلی آنجا کار نمی‌کند. پروژه اکنون روی **PostgreSQL** است و به یک دیتابیس ابری نیاز دارد.
+
+### گام ۱ — ساخت دیتابیس ابری (رایگان)
+
+1. در [neon.tech](https://neon.tech) ثبت‌نام کنید و یک پروژه بسازید (یا از داشبورد ورسل: **Storage → Create Database → Neon Postgres**).
+2. از داشبورد Neon دو رشتهٔ اتصال بردارید:
+   - **Pooled** (با `-pooler` در هاست) → برای متغیر محیطی ورسل
+   - **Direct** (بدون `-pooler`) → برای ساخت جداول و سید
+
+### گام ۲ — متغیرهای محیطی در ورسل
+
+در **Settings → Environment Variables** پروژهٔ ورسل این دو متغیر را اضافه کنید (برای محیط Production و Preview):
+
+| متغیر | مقدار |
+|---|---|
+| `DATABASE_URL` | رشتهٔ اتصال **Pooled** + `?sslmode=require&pgbouncer=true&connection_limit=1` |
+| `AUTH_SECRET` | یک رشتهٔ تصادفی بلند (مثلاً ۶۴ کاراکتر هگز) |
+
+### گام ۳ — ساخت جداول و دادهٔ دمو
+
+یک بار از سیستم خودتان (یا همان محیط توسعه) روی دیتابیس ابری:
 
 ```bash
-bun run db:push        # ساخت اسکیمای خالی
-bun scripts/seed.ts    # درج دادهٔ دمو (قابل اجرای مکرر)
+# توجه: رشتهٔ Direct (بدون -pooler)
+DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require" bunx prisma db push
+DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require" bun scripts/seed.ts
 ```
+
+### گام ۴ — استقرار
+
+مخزن را به ورسل وصل کنید (Import Git Repository) و Deploy بزنید. Build به‌صورت خودکار `prisma generate` را اجرا می‌کند.
+
+**نکته‌های مهم:**
+
+- تصاویر نقشه‌هایی که اپراتورها بارگذاری می‌کنند، به‌صورت بایت در خود دیتابیس ذخیره و از مسیر `/api/uploads/[id]` سرو می‌شوند؛ بنابراین محدودیت حجم آپلود عملی ~۴.۵ مگابایت (سقف بدنهٔ درخواست در ورسل) است.
+- تصاویر دموی seed به‌صورت فایل استاتیک داخل مخزن (`public/uploads/`) قرار دارند و نیازی به کار اضافه ندارند.
+- سوابق سرویس واقعی را در دیتابیس ابری نگه دارید؛ در صورت اجرای دوبارهٔ seed روی دیتابیس پرشده، فقط در صورت وجود لوکوموتیو دموی هم‌نام skip می‌شود (با `--force` بازسازی کامل می‌شود).
 
 ## ساختار پروژه
 
 ```
-prisma/schema.prisma   # مدل داده: User, Train, PartNode, Area, ServiceRecord
+prisma/schema.prisma   # مدل داده: User, Train, PartNode, Area, ServiceRecord, Upload
 src/lib/               # احراز هویت، تاریخ جلالی، کلاینت API
-src/app/api/           # مسیرهای REST (auth, trains, nodes, areas, records, export, users, stats)
+src/app/api/           # مسیرهای REST (auth, trains, nodes, areas, records, export, upload, uploads, users, stats)
 src/components/app/    # کامپوننت‌های سامانه (ناوگر، سازندهٔ نقشه، فرم سرویس، سوابق، گزارش، کاربران)
 src/components/ui/     # کامپوننت‌های پایه (shadcn/ui)
 assets/demo/           # نقشه‌های فنی دمو
-public/uploads/        # تصاویر بارگذاری‌شده
+public/uploads/        # تصاویر استاتیک دمو (seed)
 scripts/               # seed و ابزارهای کمکی
 ```
 
